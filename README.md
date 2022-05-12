@@ -9,13 +9,16 @@ use logfmt;
 use log;
 
 export fn main() void = {
+    // create an instance of the logger
     let l = logfmt::new(os::stderr);
 
-	log::setlogger(&l);
+    // set the global logger to the logfmt logger
+    log::setlogger(&l);
 
-    log::println(&l, "request_uri", "/", "method", "POST", "user_id", 123);
-    log::println(&l, "request_uri", "/sign-in", "method", "GET");
-    log::println(&l, "request_uri", "/dashboard", "method", "GET", "user_id", 123);
+    // use the normal log::println function
+    log::println("request_uri", "/", "method", "POST", "user_id", 123);
+    log::println("request_uri", "/sign-in", "method", "GET");
+    log::println("request_uri", "/dashboard", "method", "GET", "user_id", 123);
 };
 ```
 
