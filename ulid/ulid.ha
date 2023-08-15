@@ -131,20 +131,26 @@ export fn decode(in: io::handle) (ulid | invalid | io::error) = {
 	
 	id[0] = (decoding[buf[0]]<<5) | decoding[buf[1]];
 	id[1] = (decoding[buf[2]] << 3) | (decoding[buf[3]] >> 2);
-	id[2] = (decoding[buf[3]] << 6) | (decoding[buf[4]] << 1) | (decoding[buf[5]] >> 4);
+	id[2] = (decoding[buf[3]] << 6) | (decoding[buf[4]] << 1)
+			| (decoding[buf[5]] >> 4);
 	id[3] = (decoding[buf[5]] << 4) | (decoding[buf[6]] >> 1);
-	id[4] = (decoding[buf[6]] << 7) | (decoding[buf[7]] << 2) | (decoding[buf[8]] >> 3);
+	id[4] = (decoding[buf[6]] << 7) | (decoding[buf[7]] << 2)
+			| (decoding[buf[8]] >> 3);
 	id[5] = (decoding[buf[8]] << 5) | decoding[buf[9]];
 
 	id[6] = (decoding[buf[10]] << 3) | (decoding[buf[11]] >> 2);
-	id[7] = (decoding[buf[11]] << 6) | (decoding[buf[12]] << 1) | (decoding[buf[13]] >> 4);
+	id[7] = (decoding[buf[11]] << 6) | (decoding[buf[12]] << 1)
+			| (decoding[buf[13]] >> 4);
 	id[8] = (decoding[buf[13]] << 4) | (decoding[buf[14]] >> 1);
-	id[9] = (decoding[buf[14]] << 7) | (decoding[buf[15]] << 2) | (decoding[buf[16]] >> 3);
+	id[9] = (decoding[buf[14]] << 7) | (decoding[buf[15]] << 2)
+			| (decoding[buf[16]] >> 3);
 	id[10] = (decoding[buf[16]] << 5) | decoding[buf[17]];
 	id[11] = (decoding[buf[18]] << 3) | decoding[buf[19]]>>2;
-	id[12] = (decoding[buf[19]] << 6) | (decoding[buf[20]] << 1) | (decoding[buf[21]] >> 4);
+	id[12] = (decoding[buf[19]] << 6) | (decoding[buf[20]] << 1)
+			| (decoding[buf[21]] >> 4);
 	id[13] = (decoding[buf[21]] << 4) | (decoding[buf[22]] >> 1);
-	id[14] = (decoding[buf[22]] << 7) | (decoding[buf[23]] << 2) | (decoding[buf[24]] >> 3);
+	id[14] = (decoding[buf[22]] << 7) | (decoding[buf[23]] << 2)
+			| (decoding[buf[24]] >> 3);
 	id[15] = (decoding[buf[24]] << 5) | decoding[buf[25]];
 	
 	return id;
