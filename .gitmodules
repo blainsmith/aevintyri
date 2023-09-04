@@ -1,0 +1,6 @@
+[submodule "vendor/ev"]
+	path = vendor/ev
+	url = https://git.sr.ht/~sircmpwn/hare-ev
+[submodule "vendor/logfmt"]
+	path = vendor/logfmt
+	url = https://git.sr.ht/~blainsmith/hare-logfmt
