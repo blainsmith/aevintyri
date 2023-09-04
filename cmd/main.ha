@@ -3,7 +3,7 @@ use ev;
 use getopt;
 use io;
 use log;
-use logfmt;
+use log::logfmt;
 use net;
 use net::ip;
 use net::tcp;
