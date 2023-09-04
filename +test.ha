@@ -5,18 +5,18 @@ use strings;
 use fmt;
 
 @test fn logfmt() void = {
-    let s = teststream_open();
+	let s = teststream_open();
 
-    let l = new(&s);
+	let l = new(&s);
 
 	log::setlogger(&l);
-    log::println("request_uri", "/", "method", "POST", "user_id", 123);
+	log::println("request_uri", "/", "method", "POST", "user_id", 123);
 
-    let sbuf = strings::fromutf8(s.buf);
+	let sbuf = strings::fromutf8(s.buf)!;
 
-    assert(strings::contains(sbuf, "request_uri=/ method=POST user_id=123"));
+	assert(strings::contains(sbuf, "request_uri=/ method=POST user_id=123"));
 
-    free(sbuf);
+	free(sbuf);
 };
 
 const teststream_vtable: io::vtable = io::vtable {
@@ -43,8 +43,6 @@ fn teststream_read(s: *io::stream, buf: []u8) (size | io::EOF | io::error) = {
 
 fn teststream_write(s: *io::stream, buf: const []u8) (size | io::error) = {
 	let stream = s: *teststream;
-	
-    append(stream.buf, buf...);
-
+	append(stream.buf, buf...);
 	return len(buf);
 };

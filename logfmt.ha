@@ -1,7 +1,7 @@
 use io;
 use log;
 use fmt;
-use datetime;
+use time::date;
 use os;
 use encoding::utf8;
 use strings;
@@ -25,9 +25,9 @@ fn log_println(logger: *log::logger, fields: fmt::formattable...) void = {
 	const logger = logger: *logfmtlogger;
 	assert(logger.println == &log_println);
 
-	const now = datetime::now();
+	const now = date::now();
 	fmt::fprint(logger.handle, "ts="): void;
-	datetime::format(logger.handle, datetime::RFC3339, &now): void;
+	date::format(logger.handle, date::RFC3339, &now): void;
 	fmt::fprint(logger.handle, " "): void;
 
 	for (let i = 0z; i < len(fields); i+= 1) {
@@ -46,17 +46,17 @@ fn log_printfln(logger: *log::logger, fmt: str, fields: fmt::field...) void = {
 	const logger = logger: *logfmtlogger;
 	assert(logger.printfln == &log_printfln);
 	
-	const now = datetime::now();
+	const now = date::now();
 	fmt::fprint(logger.handle, "ts="): void;
-	datetime::format(logger.handle, datetime::RFC3339, &now): void;
+	date::format(logger.handle, date::RFC3339, &now): void;
 	fmt::fprint(logger.handle, " "): void;
 
 	for (let i = 0z; i < len(fields); i+= 1) {
 		if (i % 2 == 0) {
-			fmt::fprintf(logger.handle, "", fields[i]): void;
+			fmt::fprintf(logger.handle, "{}", fields[i]): void;
 			fmt::fprint(logger.handle, "="): void;
 		} else {
-			fmt::fprintf(logger.handle, "", fields[i]): void;
+			fmt::fprintf(logger.handle, "{}", fields[i]): void;
 			fmt::fprint(logger.handle, " "): void;
 		};
 	};
