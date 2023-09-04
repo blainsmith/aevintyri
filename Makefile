@@ -19,10 +19,10 @@ check:
 	$(HARE) test
 
 install:
-	mkdir -p $(DESTDIR)$(THIRDPARTYDIR)/logfmt
-	install -m644 * $(DESTDIR)$(THIRDPARTYDIR)/logfmt
+	mkdir -p $(DESTDIR)$(THIRDPARTYDIR)/log/logfmt
+	install -m644 * $(DESTDIR)$(THIRDPARTYDIR)
 
 uninstall:
-	rm -rf $(DESTDIR)$(THIRDPARTYDIR)/logfmt
+	rm -rf $(DESTDIR)$(THIRDPARTYDIR)/log/logfmt
 
 .PHONY: all clean check install uninstall
