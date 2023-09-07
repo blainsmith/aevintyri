@@ -1,9 +1,7 @@
 use errors;
-use vendor::ev;
 use getopt;
 use io;
 use log;
-use vendor::log::logfmt;
 use net;
 use net::ip;
 use net::tcp;
@@ -11,6 +9,9 @@ use os;
 use strconv;
 use strings;
 use unix::signal;
+
+use vendor::ev;
+use vendor::log::logfmt;
 
 type server = struct {
 	loop: *ev::loop,

@@ -20,6 +20,7 @@ export fn parsedirection(s: str) direction = {
 	case "south" => return direction::SOUTH;
 	case "east" => return direction::EAST;
 	case "west" => return direction::WEST;
+	case => abort();
 	};
 };
 
@@ -38,6 +39,7 @@ export fn parseaction(s: str) action = {
 	case "pick" => return action::PICK;
 	case "use" => return action::USE;
 	case "quit" => return action::QUIT;
+	case => abort();
 	};
 };
 
