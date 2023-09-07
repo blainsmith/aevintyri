@@ -10,14 +10,15 @@ use strconv;
 use strings;
 use unix::signal;
 
+use game;
+
 use vendor::ev;
 use vendor::log::logfmt;
 
 type server = struct {
 	loop: *ev::loop,
 	sock: *ev::file,
-	welcome: []u8,
-	prompt: []u8,
+	prompt: str,
 	clients: []*client,
 	exit: int,
 };
@@ -27,8 +28,9 @@ type client = struct {
 	sock: *ev::file,
 	addr: ip::addr,
 	port: u16,
-	buf: [os::BUFSZ]u8,
-	wbuf: []u8,
+	input: [os::BUFSZ]u8,
+
+	map: *game::map,
 };
 
 export fn main() void = {
@@ -67,11 +69,11 @@ export fn main() void = {
 	};
 	defer ev::close(sock);
 
+	static let prompt = "\n\n» ";
 	let state = server {
 		loop = &loop,
 		sock = sock,
-		welcome = strings::toutf8("+----------------------+\n| Welcome to Ævintýri! |\n+----------------------+\n\n» "),
-		prompt = alloc(['»', ' ']),
+		prompt = prompt,
 		...
 	};
 	ev::setuser(sock, &state);
@@ -87,7 +89,7 @@ export fn main() void = {
 };
 
 fn signal(file: *ev::file, sig: signal::sig) void = {
-	log::printfln("signal", signal::signame(sig));
+	log::println("signal", signal::signame(sig));
 	const server = ev::getuser(file): *server;
 	ev::stop(server.loop);
 };
@@ -98,26 +100,27 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 	case let sock: *ev::file =>
 		yield sock;
 	case let err: net::error =>
-		log::printfln("error", net::strerror(err));
+		log::println("scope", "server_accept", "error", net::strerror(err));
 		ev::stop(server.loop);
 		server.exit = 1;
 		return;
 	};
 	const file = ev::getfd(sock);
 	const (addr, port) = tcp::peeraddr(file) as (ip::addr, u16);
-	log::printfln("Connection from {}:{}", ip::string(addr), port);
+	log::println("client_addr", ip::string(addr), "client_port", port);
 
 	const client = alloc(client {
 		server = server,
 		sock = sock,
 		addr = addr,
 		port = port,
+		map = game::newmap(),
 		...
 	});
 	append(server.clients, client);
 	ev::setuser(client.sock, client);
-	ev::write(client.sock, &client_welcome, server.welcome);
-	ev::read(client.sock, &client_read, client.buf);
+	ev::write(client.sock, &client_noop, strings::toutf8(strings::concat(client.map.welcome, client.map.currarea.dialog, server.prompt)));
+	ev::read(client.sock, &client_read, client.input);
 	ev::accept(server.sock, &server_accept);
 };
 
@@ -125,7 +128,8 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 	const client = ev::getuser(sock): *client;
 	const n = match (r) {
 	case let err: io::error =>
-		log::printfln("client_addr", ip::string(client.addr),
+		log::println("scope", "client_read",
+			"client_addr", ip::string(client.addr),
 			"client_port", client.port,
 			"error", io::strerror(err));
 		client_close(client);
@@ -136,11 +140,29 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 	case let n: size =>
 		yield n;
 	};
-	client.wbuf = client.buf[..n];
-	ev::write(client.sock, &client_write, client.wbuf);
+
+	let input = strings::fromutf8(client.input[..(n-2)]) as str;
+	let (action, args) = strings::cut(input, " ");
+
+	log::println("action", action, "actionlen", len(action), "args", args, "argslen", len(args));
+
+	switch (game::parseaction(action)) {
+	case game::action::MOVE =>
+		const d = game::parsedirection(args);
+		game::move(client.map, d);
+	case game::action::LOOK => abort();
+	case game::action::PICK => abort();
+	case game::action::USE => abort();
+	case game::action::QUIT => 
+		client_close(client);
+		return;
+	case => abort();
+	};
+
+	ev::write(client.sock, &client_write, strings::toutf8(strings::concat(client.map.currarea.dialog, client.server.prompt)));
 };
 
-fn client_welcome(sock: *ev::file, r: (size | io::error)) void = {
+fn client_noop(sock: *ev::file, r: (size | io::error)) void = {
 	return;
 };
 
@@ -148,20 +170,17 @@ fn client_write(sock: *ev::file, r: (size | io::error)) void = {
 	const client = ev::getuser(sock): *client;
 	const n = match (r) {
 	case let err: io::error =>
-		log::printfln("{}:{}: Error: write: {}",
-			ip::string(client.addr), client.port,
-			io::strerror(err));
+		log::println("scope", "client_write",
+			"client_addr", ip::string(client.addr),
+			"client_port", client.port,
+			"error", io::strerror(err));
 		client_close(client);
 		return;
 	case let n: size =>
 		yield n;
 	};
-	static delete(client.wbuf[..n]);
-	if (len(client.wbuf) != 0) {
-		ev::write(client.sock, &client_write, client.wbuf);
-	} else {
-		ev::read(client.sock, &client_read, client.buf);
-	};
+
+	ev::read(client.sock, &client_read, client.input);
 };
 
 fn client_close(client: *client) void = {
@@ -172,8 +191,11 @@ fn client_close(client: *client) void = {
 			break;
 		};
 	};
-	log::printfln("{}:{}: Connection closed",
-		ip::string(client.addr), client.port);
+	log::println("scope", "client_close",
+		"client_addr", ip::string(client.addr),
+		"client_port", client.port);
 	ev::close(client.sock);
+	free(client.map.currarea.adjacent);
+	free(client.map.currarea);
 	free(client);
 };

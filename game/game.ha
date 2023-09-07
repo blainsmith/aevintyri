@@ -1,3 +1,5 @@
+use log;
+
 export type direction = enum {
 	NORTH,
 	SOUTH,
@@ -54,6 +56,7 @@ export fn actionstr(a: action) str = {
 };
 
 export type map = struct {
+	welcome: str,
 	currarea: *area,
 	inventory: []str,
 };
@@ -67,6 +70,23 @@ export type area = struct {
 	actions: [](action, str),
 };
 
+export fn newmap() *map = {
+	let forest = alloc(area { name = "Wooded Forest", dialog = "You find yourself alone in a wooded forest. To the EAST you see a dim light.", ... });
+	let streetlight = alloc(area { name = "Street Light", dialog = "You come to a clearing and come upon a street light at the end of the clearing. The road runs NORTH to SOUTH and has no cars in sight.", ... });
+	let container = alloc(area { name = "Shipping Container", dialog = "You make your way up the street and stop next to a rusted out shipping container. The door is open.", ... });
+
+	adjacent(forest, direction::EAST, streetlight);
+	adjacent(streetlight, direction::NORTH, container);
+
+	let m = alloc(map {
+		welcome = "+----------------------+\n| Welcome to Ævintýri! |\n+----------------------+\n\n",
+		currarea = forest,
+		...
+	});
+
+	return m;
+};
+
 export fn move(m: *map, d: direction) void = {
 	for (let i = 0z; i < len(m.currarea.adjacent); i += 1) {
 		if (m.currarea.adjacent[i].0 == d) {
@@ -77,11 +97,21 @@ export fn move(m: *map, d: direction) void = {
 	return;
 };
 
+export fn adjacent(a: *area, d: direction, b: *area) void = {
+	append(a.adjacent, (d, b));
+	switch (d) {
+	case direction::NORTH => append(b.adjacent, (direction::SOUTH, a));
+	case direction::SOUTH => append(b.adjacent, (direction::NORTH, a));
+	case direction::EAST => append(b.adjacent, (direction::WEST, a));
+	case direction::WEST => append(b.adjacent, (direction::EAST, a));
+	};
+};
+
 @test fn move() void = {
 	let forest = area { name = "Wooded Forest", dialog = "You find yourself alone in a wooded forest. To the EAST you see a dim light.", ... };
 	let streetlight = area { name = "Street Light", dialog = "After walking through the forest you come to a clearing and come upon a street light at the end of the clearing. The road runs EAST to WEST and has no cars in sight.", ... };
 
-	append(forest.adjacent, (direction::EAST, &streetlight));
+	adjacent(&forest, direction::EAST, &streetlight);
 
 	let m = map { currarea = &forest, ... };
 	assert(m.currarea.name == "Wooded Forest");
