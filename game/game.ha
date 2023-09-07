@@ -66,6 +66,8 @@ export type area = struct {
 	dialog: str,
 
 	adjacent: [](direction, *area),
+	items: [](str, str),
+	subarea: (str, str),
 
 	actions: [](action, str),
 };
@@ -73,7 +75,12 @@ export type area = struct {
 export fn newmap() *map = {
 	let forest = alloc(area { name = "Wooded Forest", dialog = "You find yourself alone in a wooded forest. To the EAST you see a dim light.", ... });
 	let streetlight = alloc(area { name = "Street Light", dialog = "You come to a clearing and come upon a street light at the end of the clearing. The road runs NORTH to SOUTH and has no cars in sight.", ... });
-	let container = alloc(area { name = "Shipping Container", dialog = "You make your way up the street and stop next to a rusted out shipping container. The door is open.", ... });
+	let container = alloc(area {
+		name = "Shipping Container",
+		dialog = "You make your way up the street and stop next to a rusted out shipping container. The door is open.",
+		subarea = ("container floor", "The floor is covered in blood and a human hand holding an old iron key."),
+		...
+	});
 
 	adjacent(forest, direction::EAST, streetlight);
 	adjacent(streetlight, direction::NORTH, container);
@@ -94,6 +101,13 @@ export fn move(m: *map, d: direction) void = {
 		};
 	};
 
+	return;
+};
+
+export fn look(m: *map, a: str) (str | void) = {
+	if (m.currarea.subarea.0 == a) {
+		return m.currarea.subarea.1;
+	};
 	return;
 };
 

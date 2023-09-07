@@ -150,16 +150,20 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 	case game::action::MOVE =>
 		const d = game::parsedirection(args);
 		game::move(client.map, d);
-	case game::action::LOOK => abort();
+		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(client.map.currarea.dialog, client.server.prompt)));
+	case game::action::LOOK =>
+		const d = match (game::look(client.map, args)) {
+		case let d: str =>
+			yield d;
+		case void =>
+			yield "Nothing interesting";
+		};
+		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(d, client.server.prompt)));
 	case game::action::PICK => abort();
 	case game::action::USE => abort();
-	case game::action::QUIT => 
-		client_close(client);
-		return;
+	case game::action::QUIT => client_close(client);
 	case => abort();
 	};
-
-	ev::write(client.sock, &client_write, strings::toutf8(strings::concat(client.map.currarea.dialog, client.server.prompt)));
 };
 
 fn client_noop(sock: *ev::file, r: (size | io::error)) void = {
