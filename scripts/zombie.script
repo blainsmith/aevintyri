@@ -1,0 +1,28 @@
+area "Wooded Forest" {
+	dialog "You find yourself alone in a wooded forest. To the east you see a dim light."
+
+	east "Street Light"
+}
+
+area "Street Light" {
+	dialog "You come to a clearing and happen upon a street light at the end of it. There is a road that run north to south."
+
+	north "Shipping Container"
+	south "Car Accident"
+}
+
+area "Car Accident" {
+	dialog "There is a massive multi-car pile up and there is no way around it."
+}
+
+area "Shipping Container" {
+	dialog "You make you way along the street and stop next to a rusted out shipping container. The door is open."
+
+	subarea "container floor" {
+		dialog "The floor is covered in blood and a human hand holding an old iron key."
+	}
+
+	item "old iron key" {
+		dialog "You pick up the bloody key and place it into your pocket."
+	}
+}
