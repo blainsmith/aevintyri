@@ -1,9 +1,9 @@
 use errors;
-use ev;
+use vendor::ev;
 use getopt;
 use io;
 use log;
-use log::logfmt;
+use vendor::log::logfmt;
 use net;
 use net::ip;
 use net::tcp;
