@@ -66,10 +66,8 @@ export type area = struct {
 	dialog: str,
 
 	adjacent: [](direction, *area),
-	items: [](str, str),
 	subarea: (str, str),
-
-	actions: [](action, str),
+	item: (str, str),
 };
 
 export fn newmap() *map = {
@@ -79,6 +77,7 @@ export fn newmap() *map = {
 		name = "Shipping Container",
 		dialog = "You make your way up the street and stop next to a rusted out shipping container. The door is open.",
 		subarea = ("container floor", "The floor is covered in blood and a human hand holding an old iron key."),
+		item = ("old iron key", "You pick up the bloody key and place it into you pocket."),
 		...
 	});
 
@@ -107,6 +106,14 @@ export fn move(m: *map, d: direction) void = {
 export fn look(m: *map, a: str) (str | void) = {
 	if (m.currarea.subarea.0 == a) {
 		return m.currarea.subarea.1;
+	};
+	return;
+};
+
+export fn pick(m: *map, i: str) (str | void) = {
+	if (m.currarea.item.0 == i) {
+		append(m.inventory, m.currarea.item.1);
+		return m.currarea.item.1;
 	};
 	return;
 };

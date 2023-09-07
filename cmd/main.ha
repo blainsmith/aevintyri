@@ -159,7 +159,14 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			yield "Nothing interesting";
 		};
 		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(d, client.server.prompt)));
-	case game::action::PICK => abort();
+	case game::action::PICK =>
+		const i = match (game::pick(client.map, args)) {
+		case let i: str =>
+			yield i;
+		case void =>
+			yield "No item around";
+		};
+		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(i, client.server.prompt)));
 	case game::action::USE => abort();
 	case game::action::QUIT => client_close(client);
 	case => abort();
