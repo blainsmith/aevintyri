@@ -146,30 +146,40 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 
 	log::println("action", action, "actionlen", len(action), "args", args, "argslen", len(args));
 
-	switch (game::parseaction(action)) {
-	case game::action::MOVE =>
-		const d = game::parsedirection(args);
-		game::move(client.map, d);
-		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(client.map.currarea.dialog, client.server.prompt)));
-	case game::action::LOOK =>
-		const d = match (game::look(client.map, args)) {
-		case let d: str =>
-			yield d;
-		case void =>
-			yield "Nothing interesting";
+	match (game::parseaction(action)) {
+	case let a: game::action =>
+		switch (a) {
+		case game::action::MOVE =>
+			const d = match (game::parsedirection(args)) {
+			case let d: game::direction =>
+				game::move(client.map, d);
+				yield d;
+			case game::invalid =>
+				yield "Not a direction";
+			};
+
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(d: str, client.server.prompt)));
+		case game::action::LOOK =>
+			const d = match (game::look(client.map, args)) {
+			case let d: str =>
+				yield d;
+			case void =>
+				yield "Nothing interesting";
+			};
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(d, client.server.prompt)));
+		case game::action::PICK =>
+			const i = match (game::pick(client.map, args)) {
+			case let i: str =>
+				yield i;
+			case void =>
+				yield "No item around";
+			};
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(i, client.server.prompt)));
+		case game::action::USE => abort();
+		case game::action::QUIT => client_close(client);
 		};
-		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(d, client.server.prompt)));
-	case game::action::PICK =>
-		const i = match (game::pick(client.map, args)) {
-		case let i: str =>
-			yield i;
-		case void =>
-			yield "No item around";
-		};
-		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(i, client.server.prompt)));
-	case game::action::USE => abort();
-	case game::action::QUIT => client_close(client);
-	case => abort();
+	case =>
+		ev::write(client.sock, &client_write, strings::toutf8(strings::concat("No idea what that means", client.server.prompt)));
 	};
 };
 
