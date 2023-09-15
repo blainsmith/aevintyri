@@ -169,7 +169,7 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(i, client.server.prompt)));
 	case game::action::USE => abort();
 	case game::action::QUIT => client_close(client);
-	case game::action::HELP => ev::write(client.sock, &client_write, strings::toutf8(game::help()));
+	case game::action::HELP => ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::help(), client.server.prompt)));
 	case => abort();
 	};
 };
