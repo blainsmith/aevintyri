@@ -1,5 +1,9 @@
 use log;
 
+export type invalid = !void;
+
+export type error = !invalid;
+
 export type direction = enum {
 	NORTH,
 	SOUTH,
@@ -16,14 +20,20 @@ export fn directionstr(d: direction) str = {
 	};
 };
 
-export fn parsedirection(s: str) direction = {
+export fn parsedirection(s: str) (direction | invalid) = {
 	switch (s) {
-	case "north" => return direction::NORTH;
-	case "south" => return direction::SOUTH;
-	case "east" => return direction::EAST;
-	case "west" => return direction::WEST;
-	case => abort();
+	case "north", "NORTH" => return direction::NORTH;
+	case "south", "SOUTH" => return direction::SOUTH;
+	case "east", "EAST" => return direction::EAST;
+	case "west", "WEST" => return direction::WEST;
+	case => return invalid;
 	};
+};
+
+@test fn parsedirection() void = {
+	assert(parsedirection("north") as direction == direction::NORTH);
+	assert(parsedirection("NORTH") as direction == direction::NORTH);
+	assert(parsedirection("nope") is invalid);
 };
 
 export type action = enum {
@@ -35,16 +45,22 @@ export type action = enum {
 	HELP,
 };
 
-export fn parseaction(s: str) action = {
+export fn parseaction(s: str) (action | invalid) = {
 	switch (s) {
-	case "move" => return action::MOVE;
-	case "look" => return action::LOOK;
-	case "pick" => return action::PICK;
-	case "use" => return action::USE;
-	case "quit" => return action::QUIT;
-	case "help" => return action::HELP;
-	case => abort();
+	case "move", "MOVE" => return action::MOVE;
+	case "look", "LOOK" => return action::LOOK;
+	case "pick", "PICK" => return action::PICK;
+	case "use", "USE" => return action::USE;
+	case "quit", "QUIT" => return action::QUIT;
+  case "help", "HELP" => return action::HELP;
+	case => return invalid;
 	};
+};
+
+@test fn parseaction() void = {
+	assert(parseaction("look") as action == action::LOOK);
+	assert(parseaction("LOOK") as action == action::LOOK);
+	assert(parseaction("swim") is invalid);
 };
 
 export fn actionstr(a: action) str = {
