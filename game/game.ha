@@ -32,6 +32,7 @@ export type action = enum {
 	PICK,
 	USE,
 	QUIT,
+	HELP,
 };
 
 export fn parseaction(s: str) action = {
@@ -41,6 +42,7 @@ export fn parseaction(s: str) action = {
 	case "pick" => return action::PICK;
 	case "use" => return action::USE;
 	case "quit" => return action::QUIT;
+	case "help" => return action::HELP;
 	case => abort();
 	};
 };
@@ -52,6 +54,7 @@ export fn actionstr(a: action) str = {
 	case action::PICK => return "pick";
 	case action::USE => return "use";
 	case action::QUIT => return "quit";
+	case action::HELP => return "help";
 	};
 };
 
@@ -116,6 +119,10 @@ export fn pick(m: *map, i: str) (str | void) = {
 		return m.currarea.item.1;
 	};
 	return;
+};
+
+export fn help() str = {
+	return "move <direction>\nlook <direction>\npick <item-name>\nuse <item-name>\nquit\nhelp\n";
 };
 
 export fn adjacent(a: *area, d: direction, b: *area) void = {
