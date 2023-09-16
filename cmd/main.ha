@@ -153,7 +153,7 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			const d = match (game::parsedirection(args)) {
 			case let d: game::direction =>
 				game::move(client.map, d);
-				yield d;
+				yield client.map.currarea.dialog;
 			case game::invalid =>
 				yield "Not a direction";
 			};
@@ -176,9 +176,10 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			};
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(i, client.server.prompt)));
 		case game::action::USE => ev::write(client.sock, &client_write, strings::toutf8(strings::concat("Not implemented", client.server.prompt)));
-	  case game::action::QUIT => client_close(client);
-	  case game::action::HELP => ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::help(), client.server.prompt)));
-	  case => ev::write(client.sock, &client_write, strings::toutf8(strings::concat("No idea what that means", client.server.prompt)));
+		case game::action::QUIT => client_close(client);
+		case game::action::HELP => ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::help(), client.server.prompt)));
+		};
+	case => ev::write(client.sock, &client_write, strings::toutf8(strings::concat("No idea what that means", client.server.prompt)));
 	};
 };
 
