@@ -1,3 +1,4 @@
+use bytes;
 use errors;
 use getopt;
 use io;
@@ -18,7 +19,6 @@ use vendor::log::logfmt;
 type server = struct {
 	loop: *ev::loop,
 	sock: *ev::file,
-	prompt: str,
 	clients: []*client,
 	exit: int,
 };
@@ -69,11 +69,9 @@ export fn main() void = {
 	};
 	defer ev::close(sock);
 
-	static let prompt = "\n\n» ";
 	let state = server {
 		loop = &loop,
 		sock = sock,
-		prompt = prompt,
 		...
 	};
 	ev::setuser(sock, &state);
@@ -119,7 +117,7 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 	});
 	append(server.clients, client);
 	ev::setuser(client.sock, client);
-	ev::write(client.sock, &client_noop, strings::toutf8(strings::concat(client.map.welcome, client.map.currarea.dialog, server.prompt)));
+	ev::write(client.sock, &client_noop, strings::toutf8(strings::concat(client.map.welcome, client.map.currarea.dialog, game::PROMPT)));
 	ev::read(client.sock, &client_read, client.input);
 	ev::accept(server.sock, &server_accept);
 };
@@ -141,45 +139,19 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 		yield n;
 	};
 
-	let input = strings::fromutf8(client.input[..(n-2)]) as str;
-	let (action, args) = strings::cut(input, " ");
+	let in = bytes::rtrim(client.input[..n], '\r', '\n');
 
-	log::println("action", action, "actionlen", len(action), "args", args, "argslen", len(args));
-
-	match (game::parseaction(action)) {
-	case let a: game::action =>
-		switch (a) {
-		case game::action::MOVE =>
-			const d = match (game::parsedirection(args)) {
-			case let d: game::direction =>
-				game::move(client.map, d);
-				yield client.map.currarea.dialog;
-			case game::invalid =>
-				yield "Not a direction";
-			};
-
-			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(d: str, client.server.prompt)));
-		case game::action::LOOK =>
-			const d = match (game::look(client.map, args)) {
-			case let d: str =>
-				yield d;
-			case void =>
-				yield "Nothing interesting";
-			};
-			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(d, client.server.prompt)));
-		case game::action::PICK =>
-			const i = match (game::pick(client.map, args)) {
-			case let i: str =>
-				yield i;
-			case void =>
-				yield "No item around";
-			};
-			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(i, client.server.prompt)));
-		case game::action::USE => ev::write(client.sock, &client_write, strings::toutf8(strings::concat("Not implemented", client.server.prompt)));
-		case game::action::QUIT => client_close(client);
-		case game::action::HELP => ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::help(), client.server.prompt)));
+	match (game::parse_input(in)) {
+	case let cmd: game::command =>
+		if (cmd.0 == game::action::QUIT) {
+			client_close(client);
+			return;
 		};
-	case => ev::write(client.sock, &client_write, strings::toutf8(strings::concat("No idea what that means", client.server.prompt)));
+
+		let response = game::exec_command(client.map, cmd);
+		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
+	case =>
+		ev::write(client.sock, &client_write, strings::toutf8(strings::concat("No idea what that means", game::PROMPT)));
 	};
 };
 

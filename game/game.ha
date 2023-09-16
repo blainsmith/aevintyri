@@ -1,5 +1,7 @@
 use log;
 
+export const PROMPT: str = "\n\n» ";
+
 export type invalid = !void;
 
 export type error = !invalid;
