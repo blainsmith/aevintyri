@@ -1,4 +1,5 @@
 use strings;
+use ascii;
 
 export type invalid = !void;
 
@@ -47,14 +48,14 @@ export type action = enum {
 };
 
 export fn parseaction(s: str) (action | invalid) = {
-	switch (s) {
-	case "move", "MOVE" => return action::MOVE;
-	case "look", "LOOK" => return action::LOOK;
-	case "pick", "PICK" => return action::PICK;
-	case "use", "USE" => return action::USE;
-	case "quit", "QUIT" => return action::QUIT;
-	case "help", "HELP" => return action::HELP;
-	case "about", "ABOUT" => return action::ABOUT;
+	switch (ascii::strlower(s)) {
+	case "move", "m", "walk" => return action::MOVE;
+	case "look", "look at" => return action::LOOK;
+	case "pick", "take", "grab" => return action::PICK;
+	case "use" => return action::USE;
+	case "quit", "exit" => return action::QUIT;
+	case "help" => return action::HELP;
+	case "about" => return action::ABOUT;
 	case => return invalid;
 	};
 };
@@ -124,6 +125,7 @@ export fn exec_command(map: *map, cmd: command) str = {
 		return i;
 	case action::USE => return "Not implemented";
 	case action::HELP => return help();
+	case action::QUIT => return "Not implemented";
 	case action::ABOUT => return ABOUT;
 	};
 };
