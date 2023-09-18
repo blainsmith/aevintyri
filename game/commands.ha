@@ -49,7 +49,7 @@ export type action = enum {
 
 export fn parseaction(s: str) (action | invalid) = {
 	switch (ascii::strlower(s)) {
-	case "move", "m", "walk" => return action::MOVE;
+	case "move", "m", "walk", "go" => return action::MOVE;
 	case "look", "look at" => return action::LOOK;
 	case "pick", "take", "grab" => return action::PICK;
 	case "use" => return action::USE;
