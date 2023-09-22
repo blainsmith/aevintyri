@@ -110,6 +110,16 @@ export fn dal_readfreelist(d: *dal) (*freelist | error) = {
 	return fl;
 };
 
+export fn dal_readnode(d: *dal, num: size) (*node | error) = {
+	let p = dal_readpage(d, num)?;
+
+	let n = newnode();
+	node_decode(n, p.data);
+	n.pagenum = num;
+
+	return n;
+};
+
 export fn dal_writepage(d: *dal, p: *page) (void | error) = {
 	let off = (p.num * d.pagesz): i64;
 	io::seek(d.file, off, io::whence::SET)?;
@@ -140,4 +150,20 @@ export fn dal_writefreelist(d: *dal, fl: *freelist) (*page | error) = {
 	d.metapage.freelistpage = p.num;
 
 	return p;
+};
+
+export fn dal_writenode(d: *dal, n: *node) (*node | error) = {
+	let p = dal_allocatepage(d);
+	if (n.pagenum == 0) {
+		p.num = freelist_nextpage(d.freelist);
+		n.pagenum = p.num;
+	} else {
+		p.num = n.pagenum;
+	};
+
+	node_encode(n, p.data);
+
+	dal_writepage(d, p)?;
+
+	return n;
 };

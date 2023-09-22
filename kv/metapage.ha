@@ -17,12 +17,12 @@ export fn metapage_finish(mp: *metapage) void = {
 };
 
 export fn metapage_encode(mp: *metapage, buf: []u8) void = {
-	endian::beputu64(buf[0..8], mp.freelistpage: u64);
+	endian::leputu64(buf[0..8], mp.freelistpage: u64);
 	return;
 };
 
 export fn metapage_decode(mp: *metapage, buf: []u8) void = {
-	let flp = endian::begetu64(buf[0..8]): size;
+	let flp = endian::legetu64(buf[0..8]): size;
 	log::println("decoded freepagelist", flp);
 	mp.freelistpage = flp;
 };
