@@ -11,6 +11,8 @@ use strconv;
 use strings;
 use unix::signal;
 
+use fmt;
+
 use game;
 
 use vendor::ev;
@@ -147,7 +149,14 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			client_close(client);
 			return;
 		};
-
+		if (cmd.0 == game::action::SAY) {
+			let message = game::exec_command(client.map, cmd);
+			broadcast_message(client, message);
+			fmt::println("Test 1")!;
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(message, game::PROMPT)));
+			return;
+		};
+		fmt::println("Test 2")!;
 		let response = game::exec_command(client.map, cmd);
 		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 	case =>
@@ -191,4 +200,19 @@ fn client_close(client: *client) void = {
 	free(client.map.currarea.adjacent);
 	free(client.map.currarea);
 	free(client);
+};
+
+// Broadcasts a message from the given client to all other clients
+//
+// # Arguments
+//
+// * `client` - The client saying the message
+// * `message` - The message being broadcasted
+fn broadcast_message(client: *client, message: str) void = {
+	const server = client.server;
+	for (let i = 0z; i < len(server.clients); i += 1) {
+		if (server.clients[i] != client) {
+			ev::write(server.clients[i].sock, &client_write, strings::toutf8(strings::concat(message, game::PROMPT)));
+		};
+	};
 };
