@@ -94,26 +94,55 @@ export type meta = struct {
 export type keydir = [64][](str, *meta);
 
 fn keydir_get(kd: *keydir, key: str) (*meta | void) = {
-	let bkt = kd[fnv::string(key) % len(kd)];
-
-	for (let i = 0z; i < len(bkt); i += 1) {
-		if (bkt[i].0 == key) {
-			return bkt[i].1;
+	let bkt = fnv::string(key) % len(kd);
+	for (let i = 0z; i < len(kd[bkt]); i += 1) {
+		if (kd[bkt][i].0 == key) {
+			return kd[bkt][i].1;
 		};
 	};
-	return void;
+	return;
 };
 
 fn keydir_set(kd: *keydir, key: str, val: *meta) void = {
-	return void;
+	let bkt = fnv::string(key) % len(kd);
+	for (let i = 0z; i < len(kd[bkt]); i += 1) {
+		if (kd[bkt][i].0 == key) {
+			kd[bkt][i].1 = val;
+			return;
+		};
+	};
+	append(kd[bkt], (key, val));
+	return;
 };
 
 fn keydir_del(kd: *keydir, key: str) void = {
-	return void;
+	let bkt = fnv::string(key) % len(kd);
+	for (let i = 0z; i < len(kd[bkt]); i += 1) {
+		if (kd[bkt][i].0 == key) {
+			delete(kd[bkt][i]);
+			return;
+		};
+	};
+	return;
 };
 
 fn keydir_finish(kd: *keydir) void = {
 	for (let i = 0z; i < len(kd); i += 1) {
 		free(kd[i]);
 	};
+};
+
+@test fn keydir() void = {
+	let kd: keydir = [[]...];
+	defer keydir_finish(&kd);
+
+	keydir_set(&kd, "key1", &meta { fid = 1, ... });
+
+	let m = keydir_get(&kd, "key1"): *meta;
+	assert(m.fid == 1);
+
+	keydir_del(&kd, "key1");
+
+	let m2 = keydir_get(&kd, "key1");
+	assert(m2 is void);
 };
