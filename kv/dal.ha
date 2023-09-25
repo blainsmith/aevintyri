@@ -68,10 +68,6 @@ export fn dal_close(d: *dal) (void | error) = {
 	return io::close(d.file)?;
 };
 
-@test fn newdal() void = {
-	assert(1 == 1);
-};
-
 fn dal_maxthreshold(d: *dal) f32 = {
 	return d.maxfill * d.pagesz: f32;
 };

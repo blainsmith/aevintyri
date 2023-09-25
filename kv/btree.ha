@@ -178,7 +178,7 @@ fn node_decode(n: *node, buf: []u8) void = {
 	return;
 };
 
-export fn node_split(curr: *node, split: *node, splitat: size) void {
+export fn node_split(curr: *node, split: *node, splitat: size) void = {
 	return;
 };
 
