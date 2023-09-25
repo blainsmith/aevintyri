@@ -1,3 +1,4 @@
+use bytes;
 use endian;
 
 export type item = struct {
@@ -34,8 +35,52 @@ export fn item_finish(i: *item) void = {
 	free(i);
 };
 
+fn node_additem(n: *node, i: *item, num: size) void = {
+	if (num == len(n.items)) {
+		append(n.items, i);
+		return;
+	};
+
+	for (let i = num+1; i < len(n.items); i += 1) {
+		n.items[i] = n.items[i+1];
+	};
+	append(n.items, n.items[len(n.items)-1]);
+	n.items[num] = i;
+	return;
+};
+
+fn node_splitindex(n: *node, threshold: f32) size = {
+	let sz = 0z; // node header size
+
+	for (let i = 0z; i < len(n.items); i += 1) {
+		sz += node_itemsz(n, i);
+
+		if (sz: f32 > threshold && i < len(n.items) - 1) {
+			return i + 1;
+		};
+	};
+
+	return 0;
+};
+
 fn node_isleaf(n: *node) bool = {
 	return len(n.children) == 0;
+};
+
+export fn nodesz(n: *node) size = {
+	let sz = 3z; // node headersize
+
+	for (let i = 0z; i < len(n.items); i += 1) {
+		sz += node_itemsz(n, i);
+	};
+
+	sz += 8;
+
+	return sz;
+};
+
+export fn node_itemsz(n: *node, i: size) size = {
+	return len(n.items[i].key) + len(n.items[i].val) + 8;
 };
 
 fn node_encode(n: *node, buf: []u8) void = {
@@ -131,4 +176,36 @@ fn node_decode(n: *node, buf: []u8) void = {
 	};
 
 	return;
+};
+
+export fn node_split(curr: *node, split: *node, splitat: size) void {
+	return;
+};
+
+export fn node_findkey(n: *node, key: []u8) (bool, size) = {
+	for (let i = 0z; i < len(n.items); i += 1) {
+		if (bytes::equal(key, n.items[i].key)) {
+			return (true, i);
+		};
+
+		if (bytes::hasprefix(key, n.items[i].key)) {
+			return (false, i);
+		};
+	};
+
+	return (false, len(n.items));
+};
+
+export fn node_findnode(d: *dal, n: *node, key: []u8) ((size, *node) | error) = {
+	let (found, i) = node_findkey(n, key);
+	if (found) {
+		return (i, n);
+	};
+
+	if (node_isleaf(n)) {
+		return notfound;
+	};
+
+	let child = dal_getnode(d, n.children[i])?;
+	return node_findnode(d, child, key);
 };

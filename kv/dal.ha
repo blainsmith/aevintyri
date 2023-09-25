@@ -6,7 +6,9 @@ use os;
 
 export def PAGESZ: size = 4096;
 
-export type error = !(...errors::error | fs::error | io::error);
+export type notfound = !void;
+
+export type error = !(...errors::error | fs::error | io::error | notfound);
 
 export type page = struct {
 	num: size,
@@ -16,6 +18,8 @@ export type page = struct {
 export type dal = struct {
 	file: io::handle,
 	pagesz: size,
+	minfill: f32,
+	maxfill: f32,
 	metapage: *metapage,
 	freelist: *freelist,
 };
@@ -29,6 +33,8 @@ export fn newdal(path: str, pagesz: size) (*dal | error) = {
 		let d = alloc(dal {
 			file = f,
 			pagesz = pagesz,
+			minfill = 0.5,
+			maxfill = 0.95,
 			metapage = mp,
 			freelist = fl,
 		});
@@ -44,6 +50,8 @@ export fn newdal(path: str, pagesz: size) (*dal | error) = {
 		let d = alloc(dal {
 			file = os::create(path, fs::mode::USER_RWX, fs::flag::RDWR)?,
 			pagesz = pagesz,
+			minfill = 0.5,
+			maxfill = 0.95,
 			metapage = mp,
 			freelist = fl,
 		});
@@ -62,6 +70,22 @@ export fn dal_close(d: *dal) (void | error) = {
 
 @test fn newdal() void = {
 	assert(1 == 1);
+};
+
+fn dal_maxthreshold(d: *dal) f32 = {
+	return d.maxfill * d.pagesz: f32;
+};
+
+fn dal_overpopulated(d: *dal, n: *node) bool = {
+	return nodesz(n): f32 > dal_maxthreshold(d);
+};
+
+fn dal_minthreshold(d: *dal) f32 = {
+	return d.minfill * d.pagesz: f32;
+};
+
+fn dal_underpopulated(d: *dal, n: *node) bool = {
+	return nodesz(n): f32 < dal_minthreshold(d);
 };
 
 export fn dal_allocatepage(d: *dal) *page = {
@@ -88,9 +112,7 @@ export fn dal_readpage(d: *dal, num: size) (*page | error) = {
 export fn dal_readmetapage(d: *dal) (*metapage | error) = {
 	let p = dal_readpage(d, 0)?;
 
-	let mp = alloc(metapage {
-		freelistpage = 0,
-	});
+	let mp = newmetapage();
 
 	metapage_decode(mp, p.data);
 
@@ -166,4 +188,18 @@ export fn dal_writenode(d: *dal, n: *node) (*node | error) = {
 	dal_writepage(d, p)?;
 
 	return n;
+};
+
+export fn dal_getnode(d: *dal, num: size) (*node | error) = {
+	let p = dal_readpage(d, num)?;
+
+	let n = newnode();
+	node_decode(n, p.data);
+	n.pagenum = num;
+
+	return n;
+};
+
+export fn dal_deletenode(d: *dal, num: size) void = {
+	return freelist_releasepage(d.freelist, num);
 };
