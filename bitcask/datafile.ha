@@ -32,3 +32,27 @@ export fn newdatafile(dir: str, idx: size) (*datafile | io::error | fs::error) =
 		});
 	};
 };
+
+export fn datafile_readat(df: *datafile, pos: size, buf: []u8) (size | io::error) = {
+	let start = pos - len(buf);
+	let rec: []u8 = alloc([], start);
+
+	io::seek(df.r, start: io::off, io::whence::SET)?;
+	io::read(df.r, rec)?;
+
+	return len(buf);
+};
+
+export fn datafile_write(df: *datafile, buf: []u8) (size | io::error) = {
+	io::write(df.w, buf)?;
+
+	let off = df.off;
+	df.off += len(buf);
+
+	return off;
+};
+
+export fn datafile_close(df: *datafile) (void | io::error) = {
+	io::close(df.w)?;
+	io::close(df.r)?;
+};
