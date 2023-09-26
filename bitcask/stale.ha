@@ -1,3 +1,5 @@
+use io;
+
 export type stale = [64][](size, *datafile);
 
 fn stale_get(s: *stale, key: size) (*datafile | void) = {
@@ -31,4 +33,12 @@ fn stale_del(s: *stale, key: size) void = {
 		};
 	};
 	return;
+};
+
+fn stale_finish(s: *stale) void = {
+	for (let bkt = 0z; bkt < len(s); bkt += 1) {
+		for (let i = 0z; i < len(s[bkt]); i += 1) {
+			datafile_finish(s[bkt][i].1)!;
+		};
+	};
 };

@@ -52,7 +52,7 @@ export fn datafile_write(df: *datafile, buf: []u8) (size | io::error) = {
 	return off;
 };
 
-export fn datafile_close(df: *datafile) (void | io::error) = {
+export fn datafile_finish(df: *datafile) (void | io::error) = {
 	io::close(df.w)?;
 	io::close(df.r)?;
 };
