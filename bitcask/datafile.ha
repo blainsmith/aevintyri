@@ -1,7 +1,10 @@
 use fmt;
 use fs;
 use io;
+use log;
 use os;
+use strings;
+use temp;
 
 def DATAFILE: str = "bitcask_{}.db";
 
@@ -13,7 +16,7 @@ export type datafile = struct {
 };
 
 export fn newdatafile(dir: str, idx: size) (*datafile | io::error | fs::error) = {
-	let path = fmt::asprintf(DATAFILE, idx);
+	let path = strings::concat(dir, "/", fmt::asprintf(DATAFILE, idx));
 
 	return match(os::stat(path)) {
 	case let stat: fs::filestat =>
@@ -55,4 +58,24 @@ export fn datafile_write(df: *datafile, buf: []u8) (size | io::error) = {
 export fn datafile_finish(df: *datafile) (void | io::error) = {
 	io::close(df.w)?;
 	io::close(df.r)?;
+};
+
+@test fn newdatafile() void = {
+	let dir = temp::dir();
+	defer os::rmdirall(dir)!;
+
+	let df = newdatafile(dir, 1)!;
+	assert(io::read(df.w, []: []u8) is io::error);
+	assert(io::write(df.r, []: []u8) is io::error);
+	assert(df.id == 1z);
+	assert(df.off == 0z);
+
+	assert(io::write(df.w, [0, 1, 2]: []u8): size == 3);
+
+	datafile_finish(df)!;
+
+	let df2 = newdatafile(dir, 1)!;
+	assert(df2.off == 3z);
+
+	datafile_finish(df2)!;
 };
