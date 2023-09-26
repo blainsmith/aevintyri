@@ -31,7 +31,7 @@ export fn header_decode(out: *header, in: []u8) void = {
 
 export type record = struct {
 	hdr: header,
-	key: []u8,
+	key: str,
 	val: []u8,
 };
 
@@ -74,7 +74,7 @@ export fn record_valid(rec: *record) bool = {
 			cksum = crc32::sum32(&crc_ieee),
 			...
 		},
-		key = [0...]: []u8,
+		key = "",
 		val = val,
 		...
 	};
