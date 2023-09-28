@@ -12,4 +12,9 @@ export fn main() void = {
 
 	let val = bitcask::db_get(db, "key2")!: []u8;
 	log::println(strings::fromutf8_unsafe(val));
+
+	bitcask::db_del(db, "key1")!;
+
+	let val = bitcask::db_get(db, "key1")!: []u8;
+	log::println(strings::fromutf8_unsafe(val));
 };

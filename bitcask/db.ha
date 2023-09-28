@@ -1,16 +1,21 @@
 use errors;
+use fmt;
 use fs;
+use glob;
 use hash;
 use hash::crc32;
 use io;
 use log;
 use os;
+use sort;
+use sort::cmp;
 use strconv;
 use strings;
 use temp;
 use time;
 
-def HINTSFILE: str = "bitcask.hints";
+def DATAFILE: str = "{}.bitcask.data";
+def HINTFILE: str = "{}.bitcask.hint";
 
 export type opts = struct {
 	dir: str,
@@ -38,36 +43,46 @@ export type db = struct {
 export type error = !(...errors::error | fs::error | io::error);
 
 export fn newdb(opts: opts) (*db | error) = {
-	let idx = 0z;
-
+	let kd = alloc([[]...]: keydir);
 	let stale = alloc([[]...]: stale);
+
+	let fids: []size = [];
 
 	let ents = os::readdir(opts.dir)?;
 	for (let i = 0z; i < len(ents); i += 1) {
-		if (!strings::hassuffix(ents[i].name, ".db")) {
+		if (!strings::hassuffix(ents[i].name, ".bitcask.data")) {
 			continue;
 		};
 
 		let filename = strings::trimprefix(ents[i].name, opts.dir);
-		let (num, _) = strings::cut(strings::cut(filename, "_").1, ".");
-		let fidx = strconv::stoz(num): size;
+		let (strfid, _) = strings::cut(filename, ".");
+		let fid = strconv::stoz(strfid): size;
 
-		let df = newdatafile(opts.dir, fidx)?;
-		stale_set(stale, fidx, df);
-
-		idx = fidx;
+		append(fids, fid);
 	};
 
-	let df = newdatafile(opts.dir, idx+1)?;
+	// must be sorted numerically
+	sort::sort(fids, size(size), &cmp::sizes);
+
+	for (let i = 0z; i < len(fids); i += 1) {
+		let df = newdatafile(opts.dir, fids[i])?;
+		stale_set(stale, fids[i], df);
+
+		match (os::open(strings::concat(opts.dir, "/", fmt::asprintf(HINTFILE, fids[i])), fs::flag::RDONLY)) {
+		case let kdf: io::file =>
+			keydir_decode(kd, kdf)?;
+		case fs::error =>
+			yield;
+		};
+	};
+
+	let nextfid = 1z;
+	if (len(fids) > 0) {
+		nextfid = fids[len(fids) - 1] + 1;
+	};
+
+	let df = newdatafile(opts.dir, nextfid)?;
  
-	let kd = alloc([[]...]: keydir);
-	match (os::open(strings::concat(opts.dir, "/", HINTSFILE), fs::flag::RDONLY)) {
-	case let kdf: io::file =>
-		keydir_decode(kd, kdf)?;
-	case fs::error =>
-		yield;
-	};
-
 	return alloc(db {
 		opts = opts,
 		keydir = kd,
@@ -77,7 +92,7 @@ export fn newdb(opts: opts) (*db | error) = {
 };
 
 export fn db_finish(db: *db) (void | error) = {
-	match (os::create(strings::concat(db.opts.dir, "/", HINTSFILE), fs::mode::USER_RWX, fs::flag::WRONLY)) {
+	match (os::create(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, db.df.id)), fs::mode::USER_RWX, fs::flag::WRONLY)) {
 	case let kdf: io::file =>
 		keydir_encode(db.keydir, kdf)?;
 	case fs::error =>
@@ -165,7 +180,8 @@ export fn db_get(db: *db, key: str) ([]u8 | void | error) = {
 };
 
 export fn db_del(db: *db, key: str) (void | error) = {
-	return;
+	db_put(db, key, []: []u8)?;
+	keydir_del(db.keydir, key);
 };
 
 export type iterator = struct {

@@ -6,8 +6,6 @@ use os;
 use strings;
 use temp;
 
-def DATAFILE: str = "bitcask_{}.db";
-
 export type datafile = struct {
 	w: io::handle,
 	r: io::handle,
