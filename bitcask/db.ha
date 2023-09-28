@@ -42,7 +42,7 @@ export type db = struct {
 
 export type error = !(...errors::error | fs::error | io::error);
 
-export fn newdb(opts: opts) (*db | error) = {
+export fn new(opts: opts) (*db | error) = {
 	let kd = alloc([[]...]: keydir);
 	let stale = alloc([[]...]: stale);
 
@@ -101,7 +101,7 @@ export fn newdb(opts: opts) (*db | error) = {
 	});
 };
 
-export fn db_finish(db: *db) (void | error) = {
+export fn finish(db: *db) (void | error) = {
 	match (os::create(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, db.df.id)), fs::mode::USER_RWX, fs::flag::WRONLY)) {
 	case let kdf: io::file =>
 		keydir_encode(db.keydir, kdf)?;
@@ -114,18 +114,18 @@ export fn db_finish(db: *db) (void | error) = {
 	datafile_finish(db.df)!;
 };
 
-@test fn newdb() void = {
+@test fn new() void = {
 	let dir = temp::dir();
 	defer os::rmdirall(dir)!;
 
 	let opts = defaultopts;
 	opts.dir = dir;
 
-	let db = newdb(opts)!;
-	defer db_finish(db)!;
+	let db = new(opts)!;
+	defer finish(db)!;
 };
 
-export fn db_put(db: *db, key: str, val: []u8) (void | error) = {
+export fn put(db: *db, key: str, val: []u8) (void | error) = {
 	let crc_ieee = crc32::crc32(&hash::crc32::ieee_table);
 	hash::reset(&crc_ieee);
 	hash::write(&crc_ieee, val);
@@ -162,7 +162,7 @@ export fn db_put(db: *db, key: str, val: []u8) (void | error) = {
 	return;
 };
 
-export fn db_get(db: *db, key: str) ([]u8 | void | error) = {
+export fn get(db: *db, key: str) ([]u8 | void | error) = {
 	let meta = match(keydir_get(db.keydir, key)) {
 	case let m: *meta =>
 		yield m;
@@ -189,24 +189,11 @@ export fn db_get(db: *db, key: str) ([]u8 | void | error) = {
 	return r.val;
 };
 
-export fn db_del(db: *db, key: str) (void | error) = {
-	db_put(db, key, []: []u8)?;
+export fn del(db: *db, key: str) (void | error) = {
+	put(db, key, []: []u8)?;
 	keydir_del(db.keydir, key);
 };
 
-export type iterator = struct {
-	key: str,
-	val: []u8,
-};
-
-export fn db_iter(db: *db) *iterator = {
-	return alloc(iterator { ... });
-};
-
-export fn db_next(iter: *iterator) ((str, []u8) | void) = {
-	return;
-};
-
-export fn db_prev(iter: *iterator) ((str, []u8) | void) = {
+export fn merge(db: *db) (void | error) = {
 	return;
 };
