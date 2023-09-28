@@ -64,9 +64,9 @@ export fn newdb(opts: opts) (*db | error) = {
 	// must be sorted numerically
 	sort::sort(fids, size(size), &cmp::sizes);
 
+	let nextfid = 0z;
 	for (let i = 0z; i < len(fids); i += 1) {
 		let df = newdatafile(opts.dir, fids[i])?;
-		stale_set(stale, fids[i], df);
 
 		match (os::open(strings::concat(opts.dir, "/", fmt::asprintf(HINTFILE, fids[i])), fs::flag::RDONLY)) {
 		case let kdf: io::file =>
@@ -74,14 +74,24 @@ export fn newdb(opts: opts) (*db | error) = {
 		case fs::error =>
 			yield;
 		};
+
+		stale_set(stale, fids[i], df);
 	};
 
 	let nextfid = 1z;
 	if (len(fids) > 0) {
-		nextfid = fids[len(fids) - 1] + 1;
+		nextfid = fids[len(fids) - 1];
+		let df = newdatafile(opts.dir, nextfid)?;
+
+		if (df.off >= opts.maxfilesz) {
+			nextfid += 1;
+		};
+
+		datafile_finish(df)?;
 	};
 
 	let df = newdatafile(opts.dir, nextfid)?;
+	stale_del(stale, nextfid);
  
 	return alloc(db {
 		opts = opts,
