@@ -76,7 +76,7 @@ fn keydir_finish(kd: *keydir) void = {
 fn keydir_encode(kd: *keydir, w: io::handle) (void | io::error) = {
 	for (let bkt = 0z; bkt < len(kd); bkt += 1) {
 		for (let i = 0z; i < len(kd[bkt]); i += 1) {
-			let klen: [4]u8 = [0...];
+			let klen: [2]u8 = [0...];
 			endian::little.putu16(klen, len(kd[bkt][i].0): u16);
 			io::write(w, klen[0..])?;
 			
@@ -86,15 +86,15 @@ fn keydir_encode(kd: *keydir, w: io::handle) (void | io::error) = {
 			endian::little.putu64(ts, time::unix(kd[bkt][i].1.ts): u64);
 			io::write(w, ts[0..])?;
 
-			let recsz: [4]u8 = [0...];
+			let recsz: [2]u8 = [0...];
 			endian::little.putu16(recsz, kd[bkt][i].1.recsz: u16);
 			io::write(w, recsz[0..])?;
 
-			let recpos: [4]u8 = [0...];
+			let recpos: [2]u8 = [0...];
 			endian::little.putu16(recpos, kd[bkt][i].1.recpos: u16);
 			io::write(w, recpos[0..])?;
 
-			let fid: [4]u8 = [0...];
+			let fid: [2]u8 = [0...];
 			endian::little.putu16(fid, kd[bkt][i].1.fid: u16);
 			io::write(w, fid[0..])?;
 		};
@@ -105,7 +105,7 @@ fn keydir_decode(kd: *keydir, r: io::handle) (void | io::error) = {
 	for (true) {
 		let m = alloc(meta { ... });
 
-		let klenbuf: [4]u8 = [0...];
+		let klenbuf: [2]u8 = [0...];
 		if (io::read(r, klenbuf[..])? is io::EOF) {
 			break;
 		};
@@ -122,19 +122,19 @@ fn keydir_decode(kd: *keydir, r: io::handle) (void | io::error) = {
 		};
 		m.ts = time::from_unix(endian::little.getu64(tsbuf): i64);
 
-		let recszbuf: [4]u8 = [0...];
+		let recszbuf: [2]u8 = [0...];
 		if (io::read(r, recszbuf[..])? is io::EOF) {
 			return errors::invalid;
 		};
 		m.recsz = endian::little.getu16(recszbuf): size;
 
-		let recposbuf: [4]u8 = [0...];
+		let recposbuf: [2]u8 = [0...];
 		if (io::read(r, recposbuf[..])? is io::EOF) {
 			return errors::invalid;
 		};
 		m.recpos = endian::little.getu16(recposbuf): size;
 
-		let fidbuf: [4]u8 = [0...];
+		let fidbuf: [2]u8 = [0...];
 		if (io::read(r, fidbuf[..])? is io::EOF) {
 			return errors::invalid;
 		};

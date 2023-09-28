@@ -3,7 +3,10 @@ use hash;
 use hash::crc32;
 use hash::fnv;
 use log;
+use strings;
 use time;
+
+def HDRSZ: size = 28;
 
 export type header = struct {
 	cksum: u32,
@@ -33,6 +36,24 @@ export type record = struct {
 	hdr: header,
 	key: str,
 	val: []u8,
+};
+
+export fn record_encode(out: []u8, r: *record) void = {
+	header_encode(out, &r.hdr);
+
+	let kend = HDRSZ + r.hdr.keysz;
+	let vend = kend + r.hdr.valsz;
+	out[HDRSZ..kend] = strings::toutf8(r.key);
+	out[kend..vend] = r.val;
+};
+
+export fn record_decode(out: *record, in: []u8) void = {
+	header_decode(&out.hdr, in);
+
+	let kend = HDRSZ + out.hdr.keysz;
+	let vend = kend + out.hdr.valsz;
+	out.key = strings::fromutf8_unsafe(in[HDRSZ..kend]);
+	out.val = in[kend..vend];
 };
 
 export fn record_expired(rec: *record) bool = {

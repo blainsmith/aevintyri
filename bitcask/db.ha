@@ -49,7 +49,7 @@ export fn newdb(opts: opts) (*db | error) = {
 		};
 
 		let filename = strings::trimprefix(ents[i].name, opts.dir);
-		let (_, num) = strings::cut(filename, "_");
+		let (num, _) = strings::cut(strings::cut(filename, "_").1, ".");
 		let fidx = strconv::stoz(num): size;
 
 		let df = newdatafile(opts.dir, fidx)?;
@@ -121,15 +121,15 @@ export fn db_put(db: *db, key: str, val: []u8) (void | error) = {
 		val = val,
 	};
 
-	let hdrbuf: [28]u8 = [0...];
-	header_encode(hdrbuf[..], &hdr);
+	let recbuf: []u8 = alloc([0...], HDRSZ + rec.hdr.keysz+rec.hdr.valsz);
+	record_encode(recbuf, &rec);
 
-	let off = datafile_write(db.df, hdrbuf[..])?;
+	let off = datafile_write(db.df, recbuf)?;
 
 	let meta = alloc(meta {
 		ts = rec.hdr.ts,
-		recsz = rec.hdr.keysz + rec.hdr.valsz,
-		recpos = off + rec.hdr.keysz + rec.hdr.valsz,
+		recsz = HDRSZ + rec.hdr.keysz + rec.hdr.valsz,
+		recpos = off,
 		fid = db.df.id,
 	});
 	keydir_set(db.keydir, key, meta);
@@ -155,10 +155,13 @@ export fn db_get(db: *db, key: str) ([]u8 | void | error) = {
 		};
 	};
 
-	let val: []u8 = alloc([], meta.recsz);
-	datafile_readat(reader, meta.recpos, val)?;
+	let rec: []u8 = alloc([0...], meta.recsz);
+	datafile_readat(reader, meta.recpos, rec)?;
 
-	return val;
+	let r = alloc(record { ... });
+	record_decode(r, rec);
+
+	return r.val;
 };
 
 export fn db_del(db: *db, key: str) (void | error) = {

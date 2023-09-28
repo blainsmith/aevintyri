@@ -37,11 +37,8 @@ export fn newdatafile(dir: str, idx: size) (*datafile | io::error | fs::error) =
 };
 
 export fn datafile_readat(df: *datafile, pos: size, buf: []u8) (size | io::error) = {
-	let start = pos - len(buf);
-	let rec: []u8 = alloc([], start);
-
-	io::seek(df.r, start: io::off, io::whence::SET)?;
-	io::read(df.r, rec)?;
+	io::seek(df.r, pos: io::off, io::whence::SET)?;
+	io::read(df.r, buf)?;
 
 	return len(buf);
 };
