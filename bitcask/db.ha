@@ -42,12 +42,15 @@ export type db = struct {
 
 export type error = !(...errors::error | fs::error | io::error);
 
+fn unixnano(i: time::instant) i64 = {
+	return (i.sec * 1e9) + i.nsec;
+};
+
 export fn new(opts: opts) (*db | error) = {
 	let kd = alloc([[]...]: keydir);
 	let stale = alloc([[]...]: stale);
 
-	let fids: []size = [];
-
+	let fids: []i64 = [];
 	let ents = os::readdir(opts.dir)?;
 	for (let i = 0z; i < len(ents); i += 1) {
 		if (!strings::hassuffix(ents[i].name, ".bitcask.data")) {
@@ -56,15 +59,12 @@ export fn new(opts: opts) (*db | error) = {
 
 		let filename = strings::trimprefix(ents[i].name, opts.dir);
 		let (strfid, _) = strings::cut(filename, ".");
-		let fid = strconv::stoz(strfid): size;
+		let fid = strconv::stoi64(strfid): i64;
 
 		append(fids, fid);
 	};
 
-	// must be sorted numerically
-	sort::sort(fids, size(size), &cmp::sizes);
-
-	let nextfid = 0z;
+	let fid = unixnano(time::now(time::clock::REALTIME));
 	for (let i = 0z; i < len(fids); i += 1) {
 		let df = newdatafile(opts.dir, fids[i])?;
 
@@ -75,23 +75,15 @@ export fn new(opts: opts) (*db | error) = {
 			yield;
 		};
 
-		stale_set(stale, fids[i], df);
-	};
-
-	let nextfid = 1z;
-	if (len(fids) > 0) {
-		nextfid = fids[len(fids) - 1];
-		let df = newdatafile(opts.dir, nextfid)?;
-
-		if (df.off >= opts.maxfilesz) {
-			nextfid += 1;
+		if (datafile_full(df, opts.maxfilesz)) {
+			stale_set(stale, fids[i], df);
+			continue;
 		};
 
-		datafile_finish(df)?;
+		fid = fids[i];
 	};
 
-	let df = newdatafile(opts.dir, nextfid)?;
-	stale_del(stale, nextfid);
+	let df = newdatafile(opts.dir, fid)?;
  
 	return alloc(db {
 		opts = opts,

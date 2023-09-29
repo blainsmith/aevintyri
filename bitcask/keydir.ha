@@ -13,7 +13,7 @@ export type meta = struct {
 	ts: time::instant,
 	recsz: size,
 	recpos: size,
-	fid: size,
+	fid: i64,
 };
 
 export type keydir = [64][](str, *meta);
@@ -94,8 +94,8 @@ fn keydir_encode(kd: *keydir, w: io::handle) (void | io::error) = {
 			endian::little.putu16(recpos, kd[bkt][i].1.recpos: u16);
 			io::write(w, recpos[0..])?;
 
-			let fid: [2]u8 = [0...];
-			endian::little.putu16(fid, kd[bkt][i].1.fid: u16);
+			let fid: [8]u8 = [0...];
+			endian::little.putu64(fid, kd[bkt][i].1.fid: u64);
 			io::write(w, fid[0..])?;
 		};
 	};
@@ -134,11 +134,11 @@ fn keydir_decode(kd: *keydir, r: io::handle) (void | io::error) = {
 		};
 		m.recpos = endian::little.getu16(recposbuf): size;
 
-		let fidbuf: [2]u8 = [0...];
+		let fidbuf: [8]u8 = [0...];
 		if (io::read(r, fidbuf[..])? is io::EOF) {
 			return errors::invalid;
 		};
-		m.fid = endian::little.getu16(fidbuf): size;
+		m.fid = endian::little.getu64(fidbuf): i64;
 
 		keydir_set(kd, strings::fromutf8_unsafe(key), m);
 	};
@@ -154,13 +154,13 @@ fn keydir_decode(kd: *keydir, r: io::handle) (void | io::error) = {
 		ts = time::now(time::clock::REALTIME),
 		recsz = 3z,
 		recpos = 10z,
-		fid = 1z,
+		fid = 1i64,
 	});
 	keydir_set(&kd, "this is a longer key", &meta {
 		ts = time::now(time::clock::REALTIME),
 		recsz = 10z,
 		recpos = 5z,
-		fid = 10z,
+		fid = 10i64,
 	});
 
 	// encode the keydir to the in-memory file
@@ -181,5 +181,5 @@ fn keydir_decode(kd: *keydir, r: io::handle) (void | io::error) = {
 	let m = keydir_get(&kdnew, "key1"): *meta;
 	assert(m.recsz == 3z);
 	assert(m.recpos == 10z);
-	assert(m.fid == 1z);
+	assert(m.fid == 1i64);
 };
