@@ -18,16 +18,16 @@ export type header = struct {
 
 export fn header_encode(out: []u8, in: *header) void = {
 	endian::little.putu32(out[0..4], in.cksum);
-	endian::little.putu64(out[4..12], time::unix(in.ts): u64);
-	endian::little.putu64(out[12..20], time::unix(in.expiry): u64);
+	endian::little.putu64(out[4..12], unixnano(in.ts): u64);
+	endian::little.putu64(out[12..20], unixnano(in.expiry): u64);
 	endian::little.putu32(out[20..24], in.keysz: u32);
 	endian::little.putu32(out[24..28], in.valsz: u32);
 };
 
 export fn header_decode(out: *header, in: []u8) void = {
 	out.cksum = endian::little.getu32(in[0..4]);
-	out.ts = time::from_unix(endian::little.getu64(in[4..12]): i64);
-	out.expiry = time::from_unix(endian::little.getu64(in[12..20]): i64);
+	out.ts = from_unixnano(0, endian::little.getu64(in[4..12]): i64);
+	out.expiry = from_unixnano(0, endian::little.getu64(in[12..20]): i64);
 	out.keysz = endian::little.getu32(in[20..24]): size;
 	out.valsz = endian::little.getu32(in[24..28]): size;
 };

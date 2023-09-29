@@ -46,6 +46,23 @@ fn unixnano(i: time::instant) i64 = {
 	return (i.sec * 1e9) + i.nsec;
 };
 
+fn from_unixnano(s: i64, ns: i64) time::instant = {
+	if (ns < 0 || ns >= 1e9) {
+		let n = ns / 1e9;
+		s += n;
+		ns -= n * 1e9;
+		if (ns < 0) {
+			ns += 1e9;
+			s -= 1;
+		};
+	};
+
+	return time::instant {
+		sec = s,
+		nsec = ns,
+	};
+};
+
 export fn new(opts: opts) (*db | error) = {
 	let kd = alloc([[]...]: keydir);
 	let stale = alloc([[]...]: stale);

@@ -83,7 +83,7 @@ fn keydir_encode(kd: *keydir, w: io::handle) (void | io::error) = {
 			io::write(w, strings::toutf8(kd[bkt][i].0))?;
 
 			let ts: [8]u8 = [0...];
-			endian::little.putu64(ts, time::unix(kd[bkt][i].1.ts): u64);
+			endian::little.putu64(ts, unixnano(kd[bkt][i].1.ts): u64);
 			io::write(w, ts[0..])?;
 
 			let recsz: [2]u8 = [0...];
@@ -120,7 +120,7 @@ fn keydir_decode(kd: *keydir, r: io::handle) (void | io::error) = {
 		if (io::read(r, tsbuf[..])? is io::EOF) {
 			return errors::invalid;
 		};
-		m.ts = time::from_unix(endian::little.getu64(tsbuf): i64);
+		m.ts = from_unixnano(0, endian::little.getu64(tsbuf): i64);
 
 		let recszbuf: [2]u8 = [0...];
 		if (io::read(r, recszbuf[..])? is io::EOF) {
