@@ -72,6 +72,59 @@ fn keydir_finish(kd: *keydir) void = {
 	assert(m2 is void);
 };
 
+type keydiriter = struct {
+	kd: *keydir,
+	bkt: size,
+	idx: size,
+};
+
+fn newkeydiriter(kd: *keydir) keydiriter = {
+	return keydiriter {
+		kd = kd,
+		bkt = 0,
+		idx = 0,
+	};
+};
+
+fn keydiriter_next(kdi: *keydiriter) (str | void) = {
+	if (kdi.bkt >= len(kdi.kd)) return void;
+
+	if (kdi.idx >= len(kdi.kd[kdi.bkt])) {
+		kdi.bkt += 1;
+		kdi.idx = 0;
+		return keydiriter_next(kdi);
+	};
+
+	let key = kdi.kd[kdi.bkt][kdi.idx].0;
+	kdi.idx += 1;
+
+	return key;
+};
+
+@test fn keydiriter() void = {
+	let m = meta { ... };
+
+	let kd: keydir = [[]...];
+	keydir_set(&kd, "key1", &m);
+	keydir_set(&kd, "KEY2", &m);
+	keydir_set(&kd, "ENTRY_3", &m);
+
+	let iter = newkeydiriter(&kd);
+	let keys: []str = [];
+
+	for (true) {
+		match (keydiriter_next(&iter)) {
+		case let key: str =>
+			append(keys, key);
+		case void =>
+			break;
+		};
+	};
+
+	assert(keys[0] == "key1");
+	assert(keys[1] == "KEY2");
+	assert(keys[2] == "ENTRY_3");
+};
 
 fn keydir_encode(kd: *keydir, w: io::handle) (void | io::error) = {
 	for (let bkt = 0z; bkt < len(kd); bkt += 1) {
