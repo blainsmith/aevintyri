@@ -5,12 +5,17 @@ use log;
 use os;
 use strings;
 use temp;
+use time;
 
 export type datafile = struct {
 	w: io::handle,
 	r: io::handle,
 	id: i64,
 	off: size,
+};
+
+fn gendatafileid() i64 = {
+	return unixnano(time::now(time::clock::REALTIME));
 };
 
 export fn newdatafile(dir: str, idx: i64) (*datafile | io::error | fs::error) = {

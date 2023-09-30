@@ -2,6 +2,18 @@ use io;
 
 export type stale = [64][](i64, *datafile);
 
+fn stale_keys(s: *stale) ([]i64 | void) = {
+	let keys = []: []i64;
+
+	for (let bkt = 0z; bkt < len(s); bkt += 1) {
+		for (let i = 0z; i < len(s[bkt]); i += 1) {
+			append(keys, s[bkt][i].0);
+		};
+	};
+
+	return keys;
+};
+
 fn stale_get(s: *stale, key: i64) (*datafile | void) = {
 	let bkt = key % len(s): i64;
 	for (let i = 0z; i < len(s[bkt]); i += 1) {

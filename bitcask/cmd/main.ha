@@ -3,7 +3,10 @@ use log;
 use strings;
 
 export fn main() void = {
-	let db = bitcask::new(bitcask::defaultopts)!;
+	let opts = bitcask::defaultopts;
+	opts.maxfilesz = 300;
+
+	let db = bitcask::new(opts)!;
 	defer bitcask::finish(db)!;
 
 	bitcask::put(db, "key1", ['h','e','l','l','l']: []u8)!;
@@ -12,6 +15,8 @@ export fn main() void = {
 
 	let val = bitcask::get(db, "key2")!: []u8;
 	log::println(strings::fromutf8_unsafe(val));
+
+	bitcask::rotate(db)!;
 
 	bitcask::del(db, "key1")!;
 

@@ -20,21 +20,21 @@ def HINTFILE: str = "{}.bitcask.hint";
 export type opts = struct {
 	dir: str,
 	maxfilesz: size,
-	sync: time::duration,
-	compaction: time::duration,
-	sizecheck: time::duration,
+	mergeint: time::duration,
+	rotateint: time::duration,
 };
 
 export let defaultopts = opts {
 	dir = ".",
 	maxfilesz = (1 << 32): size,
-	sync = time::MINUTE,
-	compaction = 6 * time::HOUR,
-	sizecheck = time::MINUTE,
+	mergeint = 6 * time::HOUR,
+	rotateint = time::MINUTE,
 };
 
 export type db = struct {
 	opts: opts,
+	lastmerge: time::instant,
+	lastrotate: time::instant,
 	keydir: *keydir,
 	stale: *stale,
 	df: *datafile,
@@ -81,7 +81,6 @@ export fn new(opts: opts) (*db | error) = {
 		append(fids, fid);
 	};
 
-	let fid = unixnano(time::now(time::clock::REALTIME));
 	for (let i = 0z; i < len(fids); i += 1) {
 		let df = newdatafile(opts.dir, fids[i])?;
 
@@ -92,18 +91,17 @@ export fn new(opts: opts) (*db | error) = {
 			yield;
 		};
 
-		if (datafile_full(df, opts.maxfilesz)) {
-			stale_set(stale, fids[i], df);
-			continue;
-		};
-
-		fid = fids[i];
+		stale_set(stale, fids[i], df);
 	};
 
+	let fid = gendatafileid();
 	let df = newdatafile(opts.dir, fid)?;
- 
+
+ 	let now = time::now(time::clock::REALTIME);
 	return alloc(db {
 		opts = opts,
+		lastmerge = now,
+		lastrotate = now,
 		keydir = kd,
 		stale = stale,
 		df = df,
@@ -195,14 +193,65 @@ export fn get(db: *db, key: str) ([]u8 | void | error) = {
 	let r = alloc(record { ... });
 	record_decode(r, rec);
 
+	rotate(db)?;
+
 	return r.val;
 };
 
 export fn del(db: *db, key: str) (void | error) = {
 	put(db, key, []: []u8)?;
 	keydir_del(db.keydir, key);
+	rotate(db)?;
+};
+
+export fn rotate(db: *db) (void | error) = {
+	let now = time::now(time::clock::REALTIME);
+	if (time::)
+
+	if (datafile_full(db.df, db.opts.maxfilesz)) {
+		let kdf = os::create(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, db.df.id)), fs::mode::USER_RWX, fs::flag::WRONLY)?;
+		keydir_encode(db.keydir, kdf)?;
+		io::close(kdf)?;
+
+		let fid = gendatafileid();
+		let df = newdatafile(db.opts.dir, fid)?;
+		
+		datafile_finish(db.df)?;
+
+		db.df = df;
+	};
 };
 
 export fn merge(db: *db) (void | error) = {
+	let fids = match(stale_keys(db.stale)) {
+	case let fids: []i64 =>
+		yield fids;
+	case void =>
+		return;
+	};
+
+	let newfid = unixnano(time::now(time::clock::REALTIME));
+	let newdf = newdatafile(db.opts.dir, newfid);
+	for (let i = 0z; i < len(fids); i += 1) {
+		let df = newdatafile(db.opts.dir, fids[i])?;
+
+		for (true) {
+			let hdrbuf: [HDRSZ]u8 = [0...];
+			match(io::read(df.r, hdrbuf[..])?) {
+			case io::EOF =>
+				break;
+			case =>
+				yield;
+			};
+
+			let hdr = header { ... };
+			header_decode(&hdr, hdrbuf[..]);
+
+			if (hdr.valsz <= 0z) {
+				continue;
+			};
+		};
+	};
+
 	return;
 };
