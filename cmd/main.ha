@@ -152,11 +152,9 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 		if (cmd.0 == game::action::SAY) {
 			let message = game::exec_command(client.map, cmd);
 			broadcast_message(client, message);
-			fmt::println("Test 1")!;
-			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(message, game::PROMPT)));
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat("You say: ", message, game::PROMPT)));
 			return;
 		};
-		fmt::println("Test 2")!;
 		let response = game::exec_command(client.map, cmd);
 		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 	case =>
@@ -212,7 +210,23 @@ fn broadcast_message(client: *client, message: str) void = {
 	const server = client.server;
 	for (let i = 0z; i < len(server.clients); i += 1) {
 		if (server.clients[i] != client) {
-			ev::write(server.clients[i].sock, &client_write, strings::toutf8(strings::concat(message, game::PROMPT)));
+			ev::write(server.clients[i].sock, &broadcast_cb, strings::toutf8(strings::concat(message, game::PROMPT)));
 		};
+	};
+};
+
+// Callback for Broadcast Message
+fn broadcast_cb(sock: *ev::file, r: (size | io::error)) void = {
+	const client = ev::getuser(sock): *client;
+	const n = match (r) {
+	case let err: io::error =>
+		log::println("scope", "client_write",
+			"client_addr", ip::string(client.addr),
+			"client_port", client.port,
+			"error", io::strerror(err));
+		client_close(client);
+		return;
+	case let n: size =>
+		yield n;
 	};
 };
