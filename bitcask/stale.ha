@@ -40,6 +40,7 @@ fn stale_del(s: *stale, key: i64) void = {
 	let bkt = key % len(s): i64;
 	for (let i = 0z; i < len(s[bkt]); i += 1) {
 		if (s[bkt][i].0 == key) {
+			datafile_finish(s[bkt][i].1)!;
 			delete(s[bkt][i]);
 			return;
 		};

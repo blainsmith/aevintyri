@@ -132,7 +132,7 @@ export fn finish(db: *db) (void | error) = {
 	defer finish(db)!;
 };
 
-export fn put(db: *db, key: str, val: []u8) (void | error) = {
+export fn put(db :*db, key: str, val: []u8) (void | error) = {
 	let crc_ieee = crc32::crc32(&hash::crc32::ieee_table);
 	hash::reset(&crc_ieee);
 	hash::write(&crc_ieee, val);
@@ -166,7 +166,7 @@ export fn put(db: *db, key: str, val: []u8) (void | error) = {
 	});
 	keydir_set(db.keydir, key, meta);
 
-	return;
+	rotate(db)?;
 };
 
 export fn get(db: *db, key: str) ([]u8 | void | error) = {
@@ -193,8 +193,6 @@ export fn get(db: *db, key: str) ([]u8 | void | error) = {
 	let r = alloc(record { ... });
 	record_decode(r, rec);
 
-	rotate(db)?;
-
 	return r.val;
 };
 
@@ -204,54 +202,51 @@ export fn del(db: *db, key: str) (void | error) = {
 	rotate(db)?;
 };
 
-export fn rotate(db: *db) (void | error) = {
-	let now = time::now(time::clock::REALTIME);
-	if (time::)
-
-	if (datafile_full(db.df, db.opts.maxfilesz)) {
-		let kdf = os::create(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, db.df.id)), fs::mode::USER_RWX, fs::flag::WRONLY)?;
-		keydir_encode(db.keydir, kdf)?;
-		io::close(kdf)?;
-
-		let fid = gendatafileid();
-		let df = newdatafile(db.opts.dir, fid)?;
-		
-		datafile_finish(db.df)?;
-
-		db.df = df;
-	};
-};
-
-export fn merge(db: *db) (void | error) = {
-	let fids = match(stale_keys(db.stale)) {
-	case let fids: []i64 =>
-		yield fids;
-	case void =>
+fn rotate(db: *db) (void | error) = {
+	// return early if the datafile size is not big enough
+	if (!datafile_full(db.df, db.opts.maxfilesz)) {
 		return;
 	};
 
-	let newfid = unixnano(time::now(time::clock::REALTIME));
-	let newdf = newdatafile(db.opts.dir, newfid);
-	for (let i = 0z; i < len(fids); i += 1) {
-		let df = newdatafile(db.opts.dir, fids[i])?;
+	let kdf = os::create(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, db.df.id)), fs::mode::USER_RWX, fs::flag::WRONLY)?;
+	keydir_encode(db.keydir, kdf)?;
+	io::close(kdf)?;
 
-		for (true) {
-			let hdrbuf: [HDRSZ]u8 = [0...];
-			match(io::read(df.r, hdrbuf[..])?) {
-			case io::EOF =>
-				break;
-			case =>
-				yield;
-			};
+	let fid = gendatafileid();
+	let df = newdatafile(db.opts.dir, fid)?;
 
-			let hdr = header { ... };
-			header_decode(&hdr, hdrbuf[..]);
+	stale_set(db.stale, db.df.id, db.df);
+	db.df = df;
+};
 
-			if (hdr.valsz <= 0z) {
-				continue;
-			};
+export fn merge(db: *db) (void | error) = {
+	// rotate the files so that all current data is set as stale
+	rotate(db)?;
+
+	// get all of the keydir keys and stale datafile keys at this point
+	let keydirkeys = keydir_keys(db.keydir): []str;
+	let stalekeys = stale_keys(db.stale): []i64;
+
+	// get all non-deleted and recent vals and put then into the newest
+	// datafile from the rotation
+	for (let i = 0z; i < len(keydirkeys); i += 1) {
+		let val = match(get(db, keydirkeys[i])) {
+		case let v: []u8 =>
+			yield v;
+		case void =>
+			break;
+		case error =>
+			break;
 		};
+		put(db, keydirkeys[i], val)?;
 	};
 
-	return;
+	// delete all stale datafiles from the cache and disk leaving only
+	// the merged datafiles
+	for (let i = 0z; i < len(stalekeys); i += 1) {
+		stale_del(db.stale, stalekeys[i]);
+
+		os::remove(strings::concat(db.opts.dir, "/", fmt::asprintf(DATAFILE, stalekeys[i])))?;
+		os::remove(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, stalekeys[i])))?;
+	};
 };
