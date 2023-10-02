@@ -17,24 +17,20 @@ use time;
 def DATAFILE: str = "{}.bitcask.data";
 def HINTFILE: str = "{}.bitcask.hint";
 
+// Options to configure when creating a new [[db]].
 export type opts = struct {
 	dir: str,
 	maxfilesz: size,
-	mergeint: time::duration,
-	rotateint: time::duration,
 };
 
+// Convenient settings for some default [[opt]] values.
 export let defaultopts = opts {
 	dir = ".",
 	maxfilesz = (1 << 32): size,
-	mergeint = 6 * time::HOUR,
-	rotateint = time::MINUTE,
 };
 
 export type db = struct {
 	opts: opts,
-	lastmerge: time::instant,
-	lastrotate: time::instant,
 	keydir: *keydir,
 	stale: *stale,
 	df: *datafile,
@@ -63,6 +59,8 @@ fn from_unixnano(s: i64, ns: i64) time::instant = {
 	};
 };
 
+// Returns a new [[db]] with the provided options. Caller must use [[finish]]
+// when done to free up and close any underlying memory and file handles.
 export fn new(opts: opts) (*db | error) = {
 	let kd = alloc([[]...]: keydir);
 	let stale = alloc([[]...]: stale);
@@ -97,17 +95,16 @@ export fn new(opts: opts) (*db | error) = {
 	let fid = gendatafileid();
 	let df = newdatafile(opts.dir, fid)?;
 
- 	let now = time::now(time::clock::REALTIME);
 	return alloc(db {
 		opts = opts,
-		lastmerge = now,
-		lastrotate = now,
 		keydir = kd,
 		stale = stale,
 		df = df,
 	});
 };
 
+// Frees and closes memory and file handles after encoding a hint file of the
+// [[keydir]] to disk.
 export fn finish(db: *db) (void | error) = {
 	match (os::create(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, db.df.id)), fs::mode::USER_RWX, fs::flag::WRONLY)) {
 	case let kdf: io::file =>
@@ -121,17 +118,7 @@ export fn finish(db: *db) (void | error) = {
 	datafile_finish(db.df)!;
 };
 
-@test fn new() void = {
-	let dir = temp::dir();
-	defer os::rmdirall(dir)!;
-
-	let opts = defaultopts;
-	opts.dir = dir;
-
-	let db = new(opts)!;
-	defer finish(db)!;
-};
-
+// Puts a key/value into the [[db]].
 export fn put(db :*db, key: str, val: []u8) (void | error) = {
 	let crc_ieee = crc32::crc32(&hash::crc32::ieee_table);
 	hash::reset(&crc_ieee);
@@ -169,6 +156,7 @@ export fn put(db :*db, key: str, val: []u8) (void | error) = {
 	rotate(db)?;
 };
 
+// Gets the value with the specified key from the [[db]].
 export fn get(db: *db, key: str) ([]u8 | void | error) = {
 	let meta = match(keydir_get(db.keydir, key)) {
 	case let m: *meta =>
@@ -196,6 +184,7 @@ export fn get(db: *db, key: str) ([]u8 | void | error) = {
 	return r.val;
 };
 
+// Deletes the value with the specified key from the [[db]].
 export fn del(db: *db, key: str) (void | error) = {
 	put(db, key, []: []u8)?;
 	keydir_del(db.keydir, key);
@@ -219,6 +208,10 @@ fn rotate(db: *db) (void | error) = {
 	db.df = df;
 };
 
+// Merges all non-active data files down to a set of data files containing only
+// recent keys and values since data files are append only. Over time data
+// files will end up containing old and deleted values. Merge will remove and
+// reclaim this disk space.
 export fn merge(db: *db) (void | error) = {
 	// rotate the files so that all current data is set as stale
 	rotate(db)?;
