@@ -57,6 +57,10 @@ fn record_decode(out: *record, in: []u8) void = {
 };
 
 fn record_expired(rec: *record) bool = {
+	if (time::compare(time::instant { ... }, rec.hdr.expiry) == 0) {
+		return false;
+	};
+
 	let now = time::now(time::clock::REALTIME);
 	return (time::compare(now, rec.hdr.expiry) > 0);
 };

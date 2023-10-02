@@ -36,7 +36,11 @@ export type db = struct {
 	df: *datafile,
 };
 
-export type error = !(...errors::error | fs::error | io::error);
+export type invalid = !void;
+
+export type expired = !time::instant;
+
+export type error = !(...errors::error | fs::error | io::error | invalid | expired);
 
 fn unixnano(i: time::instant) i64 = {
 	return (i.sec * 1e9) + i.nsec;
@@ -129,7 +133,7 @@ export fn put(db :*db, key: str, val: []u8) (void | error) = {
 	let hdr = header {
 		cksum = crc32::sum32(&crc_ieee),
 		ts = now,
-		expiry = now,
+		expiry = time::instant { ... },
 		keysz = len(key),
 		valsz = len(val),
 	};
@@ -180,6 +184,14 @@ export fn get(db: *db, key: str) ([]u8 | void | error) = {
 
 	let r = alloc(record { ... });
 	record_decode(r, rec);
+	
+	if (!record_valid(r)) {
+		return invalid;
+	};
+
+	if (record_expired(r)) {
+		return r.hdr.expiry: expired;
+	};
 
 	return r.val;
 };
