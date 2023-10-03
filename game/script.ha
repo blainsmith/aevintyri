@@ -27,7 +27,7 @@ export fn parseScript (path: str) []*area = {
     let newArea *area;
 
     while (peek_token(&area_tokenizer) != void) { // check if void
-        area_token = string::next_token(&area_tokenizer);
+        area_token = string::next_token(&area_tokenizer); // area "area_name {dialog "*******" "north"}"
         area_token = strings::trim(area_token);
         *area = createAreaStruct(area_token);
         addToMap(newArea);
