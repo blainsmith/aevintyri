@@ -116,6 +116,7 @@ export fn finish(db: *db) (void | error) = {
 	case fs::error =>
 		yield;
 	};
+	log::println("encoded keydir");
 
 	keydir_finish(db.keydir);
 	stale_finish(db.stale);
