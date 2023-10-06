@@ -2,6 +2,7 @@ use ascii;
 use bitcask;
 use bufio;
 use getopt;
+use fmt;
 use io;
 use log;
 use os;
@@ -28,40 +29,69 @@ export fn main() void = {
 	};
 
 	let db = bitcask::new(opts)!;
-	defer bitcask::finish(db)!;
 
 	let scn = bufio::newscanner(os::stdin, 1024);
-	defer bufio::finish(&scn);
 
 	for (true) {
-		io::write(os::stderr, strings::toutf8(PROMPT))!;
+		fmt::print(PROMPT)!;
 
 		let line = bufio::scan_line(&scn)!: const str;
 		let (c, args) = strings::cut(line, " ");
 		switch (ascii::strupper(c)) {
+		case "KEYS" =>
+			match (bitcask::keys(db)) {
+			case let keys: []str =>
+				for (let i = 0z; i < len(keys); i += 1) {
+					fmt::printfln("{}) {}", i, keys[i])!;
+				};
+				strings::freeall(keys);
+			case void =>
+				fmt::println("(empty array)")!;
+			};
 		case "GET" =>
 			let (key, _) = strings::cut(args, " ");
-			match (bitcask::get(db, key)!) {
+			key = strings::dup(key);
+			match (bitcask::get(db, key)) {
 			case let val: []u8 =>
-				io::write(os::stderr, val)!;
+				fmt::println(strings::fromutf8_unsafe(val))!;
 			case void =>
-				io::write(os::stderr, strings::toutf8("Key not found"))!;
+				fmt::println("Key not found")!;
+			case let err: bitcask::error =>
+				fmt::println(bitcask::strerror(err))!;
 			};
 		case "PUT" =>
 			let (key, val) = strings::cut(args, " ");
-			bitcask::put(db, key, strings::toutf8(val))!;
-			io::write(os::stderr, strings::toutf8("+OK"))!;
+			match (bitcask::put(db, key, strings::toutf8(val))) {
+			case void =>
+				fmt::println("+OK")!;
+			case let err: bitcask::error =>
+				fmt::println(bitcask::strerror(err))!;
+			};
 		case "DEL" =>
 			let (key, _) = strings::cut(args, " ");
-			bitcask::del(db, key)!;
-			io::write(os::stderr, strings::toutf8("+OK"))!;
+			match (bitcask::del(db, key)) {
+			case void =>
+				fmt::println("+OK")!;
+			case let err: bitcask::error =>
+				fmt::println(bitcask::strerror(err))!;
+			};
 		case "MERGE" =>
-			bitcask::merge(db)!;
-			io::write(os::stderr, strings::toutf8("+OK"))!;
+			match (bitcask::merge(db)) {
+			case void =>
+				fmt::println("+OK")!;
+			case let err: bitcask::error =>
+				fmt::println(bitcask::strerror(err))!;
+			};
 		case "QUIT" =>
-			break;
+			// bufio::finish(&scn);
+			bitcask::finish(db)!;
+			return;
 		case =>
+			fmt::println("Unknown command")!;
 			yield;
 		};
 	};
+
+	// bufio::finish(&scn);
+	// bitcask::finish(db)!;
 };
