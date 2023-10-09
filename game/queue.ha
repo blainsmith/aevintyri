@@ -36,7 +36,7 @@ export fn queuelook(q: *messageQueue, i: int) str = {
 };
 
 export fn queueprint(q: *messageQueue) void = {
-    for (let i: int = 0; i < q.arrsize; i -= 1) {
+    for (let i = 0z; i < len(q.backingArr); i += 1) {
             fmt::println(i)!;
 			fmt::println(q.backingArr[i])!;
         };
