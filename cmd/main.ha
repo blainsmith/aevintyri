@@ -32,6 +32,8 @@ type client = struct {
 	port: u16,
 	input: [os::BUFSZ]u8,
 
+	messages: *game::messageQueue,
+
 	map: *game::map,
 };
 
@@ -114,6 +116,7 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 		sock = sock,
 		addr = addr,
 		port = port,
+		messages = game::newqueue(),
 		map = game::newmap(),
 		...
 	});
@@ -151,6 +154,21 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 		};
 		if (cmd.0 == game::action::SAY) {
 			let message = game::exec_command(client.map, cmd);
+			if (message == "1"){
+				game::queueadd(client.messages, "test");
+			};
+
+			if (message == "2"){
+				fmt::println(game::queuegetsize(client.messages))!;
+				fmt::println(game::queueremove(client.messages))!;
+			};
+			if (message == "3"){
+				queueprintall(client.messages, client);
+			};
+			if (message == "4"){
+				game::queueprint(client.messages);
+			};
+			
 			broadcast_message(client, message);
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat("You say: ", message, game::PROMPT)));
 			return;
@@ -210,7 +228,8 @@ fn broadcast_message(client: *client, message: str) void = {
 	const server = client.server;
 	for (let i = 0z; i < len(server.clients); i += 1) {
 		if (server.clients[i] != client) {
-			ev::write(server.clients[i].sock, &broadcast_cb, strings::toutf8(strings::concat(message, game::PROMPT)));
+			game::queueadd(server.clients[i].messages, message);
+			//ev::write(server.clients[i].sock, &broadcast_cb, strings::toutf8(strings::concat(message, game::PROMPT)));
 		};
 	};
 };
@@ -229,4 +248,23 @@ fn broadcast_cb(sock: *ev::file, r: (size | io::error)) void = {
 	case let n: size =>
 		yield n;
 	};
+};
+
+
+fn queueprintall(q: *game::messageQueue, client: *client) void = {
+	//ev::write(client.sock, &broadcast_cb, strings::toutf8("test5"));
+    if (q.arrsize > 0 ){
+		fmt::println(len(q.backingArr))!;
+        for (let i = 0z; i < len(q.backingArr); i -= 1) {
+			fmt::println(q.backingArr[i])!;
+			//ev::write(client.sock, &broadcast_cb, strings::toutf8(q.backingArr[i]));
+			free(q.backingArr[i]);
+			delete(q.backingArr[i]);
+        };
+        
+        q.arrsize = 0;
+        return;
+    } else {
+        return;
+    };
 };
