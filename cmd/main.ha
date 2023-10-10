@@ -1,5 +1,6 @@
 use bytes;
 use errors;
+use fs;
 use getopt;
 use io;
 use log;
@@ -14,6 +15,7 @@ use unix::signal;
 use game;
 
 use vendor::ev;
+use vendor::format::scfg;
 use vendor::log::logfmt;
 
 type server = struct {
@@ -40,11 +42,13 @@ export fn main() void = {
 	const cmd = getopt::parse(os::args, "Ævintýri",
 		('a', "addr", "host IP address to bind to (default: 0.0.0.0)"),
 		('p', "port", "port to listen on (default: 7913)"),
+		('s', "script", "script file to load (default: ./scripts/zombie.script)")
 	);
 	defer getopt::finish(&cmd);
 
 	let addr: ip::addr = ip::ANY_V4;
 	let port: u16 = 7913;
+	let script: str = "./scripts/zombie.script";
 	for (let i = 0z; i < len(cmd.opts); i += 1) {
 		const opt = cmd.opts[i];
 		switch (opt.0) {
@@ -52,8 +56,24 @@ export fn main() void = {
 			addr = ip::parse(opt.1)!;
 		case 'p' =>
 			port = strconv::stou16(opt.1)!;
+		case 's' =>
+			script = opt.1;
 		case => abort();
 		};
+	};
+
+	let scriptfile = match (os::open(script)) {
+	case let err: fs::error =>
+		log::fatalf("error: {}", fs::strerror(err));
+	case let f: io::file =>
+		yield f;
+	};
+
+	let map = match (game::parse(scriptfile)) {
+	case let err: scfg::error =>
+		log::fatalf("error: {}", scfg::strerror(err));
+	case let m: *game::map =>
+		yield m;
 	};
 
 	const loop = ev::newloop()!;

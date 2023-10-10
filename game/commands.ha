@@ -1,9 +1,13 @@
+use errors;
+use io;
 use strings;
 use ascii;
 
+use vendor::format::scfg;
+
 export type invalid = !void;
 
-export type error = !invalid;
+export type error = !(...errors::error | io::error | scfg::error | invalid);
 
 export type direction = enum {
 	NORTH,

@@ -1,4 +1,9 @@
+use errors;
+use fmt;
+use io;
 use log;
+
+use vendor::format::scfg;
 
 const ABOUT: str = `Ævintýri
 
@@ -30,6 +35,27 @@ export type area = struct {
 	adjacent: [](direction, *area),
 	subarea: (str, str),
 	item: (str, str),
+};
+
+export fn parse(f: io::handle) (*map | scfg::error) = {
+	let scn = scfg::scan(f);
+	defer scfg::finish(&scn);
+
+	for (true) {
+		let directive = match (scfg::next(&scn)?) {
+		case io::EOF =>
+			break;
+		case let d: scfg::directive =>
+			yield d;
+		};
+
+		fmt::printfln("directive ({}, {})", directive.0, directive.1)!;
+
+		// Use "d" to start building a "map"
+	};
+
+	// Should return some "map" that was built from the loop above.
+	return newmap();
 };
 
 export fn newmap() *map = {
