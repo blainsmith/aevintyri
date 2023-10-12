@@ -1,4 +1,6 @@
+use bytes;
 use errors;
+use fs;
 use getopt;
 use io;
 use log;
@@ -13,12 +15,12 @@ use unix::signal;
 use game;
 
 use vendor::ev;
+use vendor::format::scfg;
 use vendor::log::logfmt;
 
 type server = struct {
 	loop: *ev::loop,
 	sock: *ev::file,
-	prompt: str,
 	clients: []*client,
 	exit: int,
 };
@@ -40,11 +42,13 @@ export fn main() void = {
 	const cmd = getopt::parse(os::args, "Ævintýri",
 		('a', "addr", "host IP address to bind to (default: 0.0.0.0)"),
 		('p', "port", "port to listen on (default: 7913)"),
+		('s', "script", "script file to load (default: ./scripts/zombie.script)")
 	);
 	defer getopt::finish(&cmd);
 
 	let addr: ip::addr = ip::ANY_V4;
 	let port: u16 = 7913;
+	let script: str = "./scripts/zombie.script";
 	for (let i = 0z; i < len(cmd.opts); i += 1) {
 		const opt = cmd.opts[i];
 		switch (opt.0) {
@@ -52,8 +56,24 @@ export fn main() void = {
 			addr = ip::parse(opt.1)!;
 		case 'p' =>
 			port = strconv::stou16(opt.1)!;
+		case 's' =>
+			script = opt.1;
 		case => abort();
 		};
+	};
+
+	let scriptfile = match (os::open(script)) {
+	case let err: fs::error =>
+		log::fatalf("error: {}", fs::strerror(err));
+	case let f: io::file =>
+		yield f;
+	};
+
+	let map = match (game::parse(scriptfile)) {
+	case let err: scfg::error =>
+		log::fatalf("error: {}", scfg::strerror(err));
+	case let m: *game::map =>
+		yield m;
 	};
 
 	const loop = ev::newloop()!;
@@ -69,11 +89,9 @@ export fn main() void = {
 	};
 	defer ev::close(sock);
 
-	static let prompt = "\n\n» ";
 	let state = server {
 		loop = &loop,
 		sock = sock,
-		prompt = prompt,
 		...
 	};
 	ev::setuser(sock, &state);
@@ -119,7 +137,7 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 	});
 	append(server.clients, client);
 	ev::setuser(client.sock, client);
-	ev::write(client.sock, &client_noop, strings::toutf8(strings::concat(client.map.welcome, client.map.currarea.dialog, server.prompt)));
+	ev::write(client.sock, &client_noop, strings::toutf8(strings::concat(client.map.welcome, client.map.currarea.dialog, game::PROMPT)));
 	ev::read(client.sock, &client_read, client.input);
 	ev::accept(server.sock, &server_accept);
 };
@@ -141,36 +159,19 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 		yield n;
 	};
 
-	let input = strings::fromutf8(client.input[..(n-2)]) as str;
-	let (action, args) = strings::cut(input, " ");
+	let in = bytes::rtrim(client.input[..n], '\r', '\n');
 
-	log::println("action", action, "actionlen", len(action), "args", args, "argslen", len(args));
+	match (game::parse_input(in)) {
+	case let cmd: game::command =>
+		if (cmd.0 == game::action::QUIT) {
+			client_close(client);
+			return;
+		};
 
-	switch (game::parseaction(action)) {
-	case game::action::MOVE =>
-		const d = game::parsedirection(args);
-		game::move(client.map, d);
-		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(client.map.currarea.dialog, client.server.prompt)));
-	case game::action::LOOK =>
-		const d = match (game::look(client.map, args)) {
-		case let d: str =>
-			yield d;
-		case void =>
-			yield "Nothing interesting";
-		};
-		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(d, client.server.prompt)));
-	case game::action::PICK =>
-		const i = match (game::pick(client.map, args)) {
-		case let i: str =>
-			yield i;
-		case void =>
-			yield "No item around";
-		};
-		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(i, client.server.prompt)));
-	case game::action::USE => abort();
-	case game::action::QUIT => client_close(client);
-	case game::action::HELP => ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::help(), client.server.prompt)));
-	case => abort();
+		let response = game::exec_command(client.map, cmd);
+		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
+	case =>
+		ev::write(client.sock, &client_write, strings::toutf8(strings::concat("No idea what that means", game::PROMPT)));
 	};
 };
 

@@ -1,62 +1,26 @@
+use errors;
+use fmt;
+use io;
 use log;
 
-export type direction = enum {
-	NORTH,
-	SOUTH,
-	EAST,
-	WEST,
-};
+use vendor::format::scfg;
 
-export fn directionstr(d: direction) str = {
-	switch (d) {
-	case direction::NORTH => return "north";
-	case direction::SOUTH => return "south";
-	case direction::EAST => return "east";
-	case direction::WEST => return "west";
-	};
-};
+const ABOUT: str = `Ævintýri
 
-export fn parsedirection(s: str) direction = {
-	switch (s) {
-	case "north" => return direction::NORTH;
-	case "south" => return direction::SOUTH;
-	case "east" => return direction::EAST;
-	case "west" => return direction::WEST;
-	case => abort();
-	};
-};
+Developed by:
+  Blain
+  Jack
+  Avery
 
-export type action = enum {
-	MOVE,
-	LOOK,
-	PICK,
-	USE,
-	QUIT,
-	HELP,
-};
+Built with:
+  https://harelang.org
 
-export fn parseaction(s: str) action = {
-	switch (s) {
-	case "move" => return action::MOVE;
-	case "look" => return action::LOOK;
-	case "pick" => return action::PICK;
-	case "use" => return action::USE;
-	case "quit" => return action::QUIT;
-	case "help" => return action::HELP;
-	case => abort();
-	};
-};
+Open source libraries:
+  https://git.sr.ht/~sircmpwn/hare-ev
+  https://git.sr.ht/~chrisppy/hare-scfg
+  https://git.sr.ht/~blainsmith/hare-logfmt`;
 
-export fn actionstr(a: action) str = {
-	switch (a) {
-	case action::MOVE => return "move";
-	case action::LOOK => return "look";
-	case action::PICK => return "pick";
-	case action::USE => return "use";
-	case action::QUIT => return "quit";
-	case action::HELP => return "help";
-	};
-};
+export const PROMPT: str = "\n\n» ";
 
 export type map = struct {
 	welcome: str,
@@ -71,6 +35,27 @@ export type area = struct {
 	adjacent: [](direction, *area),
 	subarea: (str, str),
 	item: (str, str),
+};
+
+export fn parse(f: io::handle) (*map | scfg::error) = {
+	let scn = scfg::scan(f);
+	defer scfg::finish(&scn);
+
+	for (true) {
+		let directive = match (scfg::next(&scn)?) {
+		case io::EOF =>
+			break;
+		case let d: scfg::directive =>
+			yield d;
+		};
+
+		fmt::printfln("directive ({}, {})", directive.0, directive.1)!;
+
+		// Use "d" to start building a "map"
+	};
+
+	// Should return some "map" that was built from the loop above.
+	return newmap();
 };
 
 export fn newmap() *map = {
@@ -122,7 +107,7 @@ export fn pick(m: *map, i: str) (str | void) = {
 };
 
 export fn help() str = {
-	return "move <direction>\nlook <direction>\npick <item-name>\nuse <item-name>\nquit\nhelp\n";
+	return "move <direction>\nlook <direction>\npick <item-name>\nuse <item-name>\nquit\nhelp\nabout";
 };
 
 export fn adjacent(a: *area, d: direction, b: *area) void = {
