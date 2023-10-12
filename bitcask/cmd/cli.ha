@@ -92,6 +92,6 @@ export fn main() void = {
 		};
 	};
 
-	// bufio::finish(&scn);
-	// bitcask::finish(db)!;
+	bufio::finish(&scn);
+	bitcask::finish(db)!;
 };
