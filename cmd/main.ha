@@ -228,8 +228,12 @@ fn broadcast_message(client: *client, message: str) void = {
 	const server = client.server;
 	for (let i = 0z; i < len(server.clients); i += 1) {
 		if (server.clients[i] != client) {
+			// if (game::areaequals(server.clients[i].map, client.map)) {
+			// 	ev::write(server.clients[i].sock, &broadcast_cb, strings::toutf8(strings::concat(message, game::PROMPT)));
+			// };
+			fmt::println(message)!;
 			game::queueadd(server.clients[i].messages, message);
-			//ev::write(server.clients[i].sock, &broadcast_cb, strings::toutf8(strings::concat(message, game::PROMPT)));
+			
 		};
 	};
 };

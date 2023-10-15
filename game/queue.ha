@@ -21,9 +21,9 @@ export fn queueadd(q: *messageQueue, m: str) void = {
 
 export fn queueremove(q: *messageQueue) (str | void) = {
     if (q.arrsize > 0 ){
+        let s = q.backingArr[0];
+        delete(q.backingArr[0]);
         q.arrsize = q.arrsize - 1;
-        let s = q.backingArr[q.arrsize];
-        delete(q.backingArr[q.arrsize]);
         return s;
         
     } else {
@@ -36,10 +36,12 @@ export fn queuelook(q: *messageQueue, i: int) str = {
 };
 
 export fn queueprint(q: *messageQueue) void = {
+    fmt::println("---- start print ----")!;
     for (let i = 0z; i < len(q.backingArr); i += 1) {
             fmt::println(i)!;
 			fmt::println(q.backingArr[i])!;
         };
+    fmt::println("---- end print ----")!;
 };
 
 export fn queuegetsize(q: *messageQueue) int = {

@@ -94,6 +94,10 @@ export fn adjacent(a: *area, d: direction, b: *area) void = {
 	};
 };
 
+export fn areaequals(map1: *map, map2: *map) bool = {
+	return (map1.currarea.name == map2.currarea.name);
+};
+
 @test fn move() void = {
 	let forest = area { name = "Wooded Forest", dialog = "You find yourself alone in a wooded forest. To the EAST you see a dim light.", ... };
 	let streetlight = area { name = "Street Light", dialog = "After walking through the forest you come to a clearing and come upon a street light at the end of the clearing. The road runs EAST to WEST and has no cars in sight.", ... };
