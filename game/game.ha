@@ -1,6 +1,7 @@
 use errors;
 use fmt;
 use io;
+use bufio;
 use log;
 
 use vendor::format::scfg;
@@ -32,14 +33,17 @@ export type area = struct {
 	name: str,
 	dialog: str,
 
-	adjacent: [](direction, *area),
+	adjacent: [](direction, str), // i changed the *area to str and instead of directly holding the *area we instead search the map key-dir for the str key that contains the *area
 	subarea: (str, str),
 	item: (str, str),
 };
 
 export fn parse(f: io::handle) (*map | scfg::error) = {
 	let scn = scfg::scan(f);
-	defer scfg::finish(&scn);
+	defer scfg::finish(&scn); 
+	let kd = alloc([[]...]: keydir);
+	let first = true;
+	let newarea: *area;
 
 	for (true) {
 		let directive = match (scfg::next(&scn)?) {
@@ -49,14 +53,51 @@ export fn parse(f: io::handle) (*map | scfg::error) = {
 			yield d;
 		};
 
-		fmt::printfln("directive ({}, {})", directive.0, directive.1)!;
-
-		// Use "d" to start building a "map"
+		// fmt::printfln("directive ({}, {})", directive.0, directive.1)!;
+		if (len(directive.0) == 0) { // if the block param is empty then it marks a new area
+			if (!first) {
+				keydir::keydir_set(kd, *newarea.name, &newarea);
+			}
+			newarea = alloc(1);
+			*newarea.name = directive.1;
+			if (first) {
+				first = false;
+			}
+		}
+		switch (directive.1) {
+		case "dialog":
+			*newarea.dialog = directive.2[1];
+			break;
+		case "north":
+			adjacent(newarea, direction::NORTH, directive.2[1]);
+			break;
+		case "south":
+			adjacent(newarea, direction::SOUTH, directive.2[1]);
+			break;
+		case "east":
+			adjacent(newarea, direction::EAST, directive.2[1]);
+			break;
+		case "west":
+			adjacent(newarea, direction::WEST, directive.2[1]);
+			break;
+		case "subarea":
+			let subname: str = directive.2[1];
+			directive = scfg::next(&scn);
+			*newarea.subarea = (subname, directive.2[1]);
+			break;
+		case "item":
+			let itemname: str = directive.2[1];
+			directive = scfg::next(&scn);
+			*newarea.item = (itemname, directive.2[1]);
+			break;
+		};
 	};
-
 	// Should return some "map" that was built from the loop above.
+	// need a method for searching for assembling adjacency lists of each area
+	// if I store the areas in a hashmap then find the adjacent areas is easy just use the name as the key
 	return newmap();
 };
+
 
 export fn newmap() *map = {
 	let forest = alloc(area { name = "Wooded Forest", dialog = "You find yourself alone in a wooded forest. To the EAST you see a dim light.", ... });

@@ -49,17 +49,17 @@ export fn next(s: *scanner) (directive | io::EOF | error) = {
 			continue;
 		};
 
-		const sline = shlex::split(line)?;
-		defer strings::freeall(sline);
+		const sline = shlex::split(line)?; // returns an array of strings one before the shell quote and one after
+		defer strings::freeall(sline); 
 
-		if (len(sline) < 2) {
+		if (len(sline) < 2) { // must be at least two indices in the array
 			return s.lineno: syntaxerr;
 		};
 
 		free(s.params);
 		s.params = [];
 
-		s.name = strings::dup(sline[0]);
+		s.name = strings::dup(sline[0]); // duplicate before the quotes
 		let haschild = false;
 		for (let i = 1z; i < len(sline); i += 1) {
 			const v = sline[i];
