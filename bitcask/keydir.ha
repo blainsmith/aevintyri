@@ -19,11 +19,11 @@ export type meta = struct {
 export type keydir = [64][](str, *meta);
 
 fn keydir_keys(kd: *keydir) ([]str | void) = {
-	let keys = []: []str;
+	let keys: []str = alloc([], 0);
 
 	for (let bkt = 0z; bkt < len(kd); bkt += 1) {
 		for (let i = 0z; i < len(kd[bkt]); i += 1) {
-			append(keys, kd[bkt][i].0);
+			append(keys, strings::dup(kd[bkt][i].0));
 		};
 	};
 
@@ -48,7 +48,7 @@ fn keydir_set(kd: *keydir, key: str, val: *meta) void = {
 			return;
 		};
 	};
-	append(kd[bkt], (key, val));
+	append(kd[bkt], (strings::dup(key), val));
 	return;
 };
 
@@ -56,6 +56,7 @@ fn keydir_del(kd: *keydir, key: str) void = {
 	let bkt = fnv::string(key) % len(kd);
 	for (let i = 0z; i < len(kd[bkt]); i += 1) {
 		if (kd[bkt][i].0 == key) {
+			free(kd[bkt][i].0);
 			delete(kd[bkt][i]);
 			return;
 		};
