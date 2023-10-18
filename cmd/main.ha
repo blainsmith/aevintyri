@@ -1,4 +1,5 @@
 use bytes;
+use dirs;
 use errors;
 use getopt;
 use io;
@@ -13,6 +14,7 @@ use unix::signal;
 
 use game;
 
+use vendor::bitcask;
 use vendor::ev;
 use vendor::log::logfmt;
 
@@ -20,6 +22,7 @@ type server = struct {
 	loop: *ev::loop,
 	sock: *ev::file,
 	clients: []*client,
+	db: *bitcask::db,
 	exit: int,
 };
 
@@ -31,7 +34,7 @@ type client = struct {
 	input: [os::BUFSZ]u8,
 
 	map: *game::map,
-};
+;
 
 export fn main() void = {
 	const logger = logfmt::new(os::stdout);
@@ -40,11 +43,13 @@ export fn main() void = {
 	const cmd = getopt::parse(os::args, "Ævintýri",
 		('a', "addr", "host IP address to bind to (default: 0.0.0.0)"),
 		('p', "port", "port to listen on (default: 7913)"),
+		('d', "dir", "directory to store database files (default: $XDG_DATA_HOME/.local/share/aevintyri)")
 	);
 	defer getopt::finish(&cmd);
 
 	let addr: ip::addr = ip::ANY_V4;
 	let port: u16 = 7913;
+	let dir: str = dirs::data("aevintyri");
 	for (let i = 0z; i < len(cmd.opts); i += 1) {
 		const opt = cmd.opts[i];
 		switch (opt.0) {
@@ -52,9 +57,17 @@ export fn main() void = {
 			addr = ip::parse(opt.1)!;
 		case 'p' =>
 			port = strconv::stou16(opt.1)!;
+		case 'd' =>
+			dir = strings::dup(opt.1);
 		case => abort();
 		};
 	};
+
+	let dbopts = bitcask::defaultopts;
+	dbopts.dir = dir;
+	let db = bitcask::new(dbopts)!;
+	defer bitcask::finish(db)!;
+	log::println("dir", dbopts.dir);
 
 	const loop = ev::newloop()!;
 	defer ev::finish(&loop);
@@ -72,6 +85,7 @@ export fn main() void = {
 	let state = server {
 		loop = &loop,
 		sock = sock,
+		db = db,
 		...
 	};
 	ev::setuser(sock, &state);
