@@ -160,7 +160,7 @@ export fn put(db :*db, key: str, val: []u8) (void | error) = {
 	let hdr = header {
 		cksum = crc32::sum32(&crc_ieee),
 		ts = now,
-		expiry = time::INSTANT_MAX,
+		expiry = time::instant { ... },
 		keysz = len(key),
 		valsz = len(val),
 	};
@@ -216,9 +216,9 @@ export fn get(db: *db, key: str) ([]u8 | void | error) = {
 		return invalid;
 	};
 
-	if (record_expired(r)) {
-		return r.hdr.expiry: expired;
-	};
+	// if (record_expired(r)) {
+	// 	return r.hdr.expiry: expired;
+	// };
 
 	return r.val;
 };

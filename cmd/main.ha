@@ -1,9 +1,11 @@
 use bytes;
 use dirs;
 use errors;
+use fmt;
 use getopt;
 use io;
 use log;
+use memio;
 use net;
 use net::ip;
 use net::tcp;
@@ -15,6 +17,7 @@ use unix::signal;
 use game;
 
 use vendor::bitcask;
+use vendor::encoding::json;
 use vendor::ev;
 use vendor::log::logfmt;
 
@@ -34,7 +37,8 @@ type client = struct {
 	input: [os::BUFSZ]u8,
 
 	map: *game::map,
-;
+	player: nullable *game::player,
+};
 
 export fn main() void = {
 	const logger = logfmt::new(os::stdout);
@@ -67,6 +71,8 @@ export fn main() void = {
 	dbopts.dir = dir;
 	let db = bitcask::new(dbopts)!;
 	defer bitcask::finish(db)!;
+
+	bitcask::merge(db)!;
 	log::println("dir", dbopts.dir);
 
 	const loop = ev::newloop()!;
@@ -157,13 +163,26 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 
 	match (game::parse_input(in)) {
 	case let cmd: game::command =>
-		if (cmd.0 == game::action::QUIT) {
+		switch (cmd.0) {
+		case game::action::QUIT =>
 			client_close(client);
 			return;
-		};
+		case game::action::NICK =>
+			let response = match(nick(client, cmd.1)) {
+			case let p: *game::player =>
+				client.player = p;
+				yield fmt::asprintf("Welcome, {}!", p.nick);
+			case let err: json::error =>
+				yield json::strerror(err);
+			case let err: bitcask::error =>
+				yield bitcask::strerror(err);
+			};
 
-		let response = game::exec_command(client.map, cmd);
-		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
+		case =>
+			let response = game::exec_command(client.map, cmd);
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
+		};
 	case =>
 		ev::write(client.sock, &client_write, strings::toutf8(strings::concat("No idea what that means", game::PROMPT)));
 	};
@@ -204,5 +223,27 @@ fn client_close(client: *client) void = {
 	ev::close(client.sock);
 	free(client.map.currarea.adjacent);
 	free(client.map.currarea);
+	free(client.player);
 	free(client);
+};
+
+fn nick(c: *client, n: str) (*game::player | json::error | bitcask::error) = {
+	let p = alloc(game::player { ... });
+	
+	match (bitcask::get(c.server.db, n)?) {
+	case let val: []u8 =>
+		game::decode_player(p, &memio::fixed(val))?;
+		log::println("scope", "decode_player", "player", p.nick);
+	case =>
+		p.nick = strings::dup(n);
+
+		let val = memio::dynamic();
+		defer io::close(&val)!;
+
+		game::encode_player(p, &val)?;
+		bitcask::put(c.server.db, n, memio::buffer(&val))?;
+		log::println("scope", "encode_player", "player", p.nick);
+	};
+
+	return p;
 };
