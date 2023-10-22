@@ -153,27 +153,19 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			return;
 		};
 		if (cmd.0 == game::action::SAY) {
-			let message = game::exec_command(client.map, cmd);
-			if (message == "1"){
-				game::queueadd(client.messages, "test");
-			};
-
-			if (message == "2"){
-				fmt::println(game::queuegetsize(client.messages))!;
-				fmt::println(game::queueremove(client.messages))!;
-			};
-			if (message == "3"){
-				queueprintall(client.messages, client);
-			};
-			if (message == "4"){
-				game::queueprint(client.messages);
-			};
-			
-			broadcast_message(client, message);
-			ev::write(client.sock, &client_write, strings::toutf8(strings::concat("You say: ", message, game::PROMPT)));
+			broadcast_message(client, cmd.1);
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat("You say: ", cmd.1, game::PROMPT)));
 			return;
 		};
 		let response = game::exec_command(client.map, cmd);
+
+		if (game::queuegetsize(client.messages) > 0) {
+			response = strings::concat(response, "\r\n\r\nYou have new messages:\r\n");
+			for (let i = 0z; i < game::queuegetsize(client.messages); i += 1) {
+				let msg = game::queueremove(client.messages) as str;
+				response = strings::concat(response, "\t- ", msg, "\r\n");
+			};
+		};
 		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 	case =>
 		ev::write(client.sock, &client_write, strings::toutf8(strings::concat("No idea what that means", game::PROMPT)));
@@ -252,23 +244,4 @@ fn broadcast_cb(sock: *ev::file, r: (size | io::error)) void = {
 	case let n: size =>
 		yield n;
 	};
-};
-
-
-fn queueprintall(q: *game::messageQueue, client: *client) void = {
-	//ev::write(client.sock, &broadcast_cb, strings::toutf8("test5"));
-    if (q.arrsize > 0 ){
-		fmt::println(len(q.backingArr))!;
-        for (let i = 0z; i < len(q.backingArr); i -= 1) {
-			fmt::println(q.backingArr[i])!;
-			//ev::write(client.sock, &broadcast_cb, strings::toutf8(q.backingArr[i]));
-			free(q.backingArr[i]);
-			delete(q.backingArr[i]);
-        };
-        
-        q.arrsize = 0;
-        return;
-    } else {
-        return;
-    };
 };

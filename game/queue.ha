@@ -1,38 +1,32 @@
 use fmt;
+use log;
+use strings;
 
 export type messageQueue = struct {
-	arrsize: int,
-    backingArr: []str,
+	backingArr: []str,
 };
 
 export fn newqueue() *messageQueue = {
-    let q = alloc(messageQueue {
-		arrsize = 0,
-		...
-	});
-
-	return q;
+	return alloc(messageQueue { ...});
 };
 
 export fn queueadd(q: *messageQueue, m: str) void = {
-    append(q.backingArr, m);
-    q.arrsize = q.arrsize + 1;
+    append(q.backingArr, strings::dup(m));
 };
 
 export fn queueremove(q: *messageQueue) (str | void) = {
-    if (q.arrsize > 0 ){
-        let s = q.backingArr[0];
-        delete(q.backingArr[0]);
-        q.arrsize = q.arrsize - 1;
-        return s;
-        
-    } else {
-        return void;
-    };
+	if (len(q.backingArr) <= 0) {
+		return void;
+	};
+
+	let msg = strings::dup(q.backingArr[0]);
+	delete(q.backingArr[0]);
+
+	return msg;
 };
 
 export fn queuelook(q: *messageQueue, i: int) str = {
-    return q.backingArr[i];
+    return strings::dup(q.backingArr[i]);
 };
 
 export fn queueprint(q: *messageQueue) void = {
@@ -44,6 +38,14 @@ export fn queueprint(q: *messageQueue) void = {
     fmt::println("---- end print ----")!;
 };
 
-export fn queuegetsize(q: *messageQueue) int = {
-    return q.arrsize;
+export fn queuegetsize(q: *messageQueue) size = {
+    return len(q.backingArr);
+};
+
+export fn queueprintall(q: *messageQueue) void = {
+	log::println("queue size", len(q.backingArr));
+	for (let i = 0z; i < len(q.backingArr); i += 1) {
+		log::println(i, q.backingArr[i]);
+	};
+	log::println("");
 };
