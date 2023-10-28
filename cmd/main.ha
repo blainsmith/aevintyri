@@ -152,16 +152,20 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			client_close(client);
 			return;
 		};
-		if (cmd.0 == game::action::SAY) {
-			broadcast_message(client, cmd.1);
-			ev::write(client.sock, &client_write, strings::toutf8(strings::concat("You say: ", cmd.1, game::PROMPT)));
-			return;
-		};
+
 		let response = game::exec_command(client.map, cmd);
 
-		if (game::queuegetsize(client.messages) > 0) {
+		if (cmd.0 == game::action::SAY) {
+			broadcast_message(client, cmd.1);
+			response = strings::concat("You say: ", cmd.1);
+			//ev::write(client.sock, &client_write, strings::toutf8(strings::concat("You say: ", cmd.1, game::PROMPT)));
+			//return;
+		};
+		
+		let queuesize = game::queuegetsize(client.messages);
+		if (queuesize > 0) {
 			response = strings::concat(response, "\r\n\r\nYou have new messages:\r\n");
-			for (let i = 0z; i < game::queuegetsize(client.messages); i += 1) {
+			for (let i = 0z; i < queuesize; i += 1) {
 				let msg = game::queueremove(client.messages) as str;
 				response = strings::concat(response, "\t- ", msg, "\r\n");
 			};
@@ -220,12 +224,10 @@ fn broadcast_message(client: *client, message: str) void = {
 	const server = client.server;
 	for (let i = 0z; i < len(server.clients); i += 1) {
 		if (server.clients[i] != client) {
-			// if (game::areaequals(server.clients[i].map, client.map)) {
-			// 	ev::write(server.clients[i].sock, &broadcast_cb, strings::toutf8(strings::concat(message, game::PROMPT)));
-			// };
-			fmt::println(message)!;
-			game::queueadd(server.clients[i].messages, message);
-			
+			if (game::areaequals(server.clients[i].map, client.map)) {
+			//fmt::println(message)!;
+			game::queueadd(server.clients[i].messages, strings::concat("(", client.map.currarea.name, ") Someone said: ", message));
+			};
 		};
 	};
 };

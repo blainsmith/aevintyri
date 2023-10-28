@@ -25,10 +25,6 @@ export fn queueremove(q: *messageQueue) (str | void) = {
 	return msg;
 };
 
-export fn queuelook(q: *messageQueue, i: int) str = {
-    return strings::dup(q.backingArr[i]);
-};
-
 export fn queueprint(q: *messageQueue) void = {
     fmt::println("---- start print ----")!;
     for (let i = 0z; i < len(q.backingArr); i += 1) {

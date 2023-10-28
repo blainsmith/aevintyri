@@ -81,7 +81,7 @@ export fn pick(m: *map, i: str) (str | void) = {
 };
 
 export fn help() str = {
-	return "move <direction>\nlook <direction>\npick <item-name>\nuse <item-name>\nquit\nhelp\nabout";
+	return "move <direction>\nlook <direction>\npick <item-name>\nuse <item-name>\nsay <what-to-say> (talk to others in same area)\nquit\nhelp\nabout";
 };
 
 export fn adjacent(a: *area, d: direction, b: *area) void = {
