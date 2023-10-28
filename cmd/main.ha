@@ -36,7 +36,7 @@ type client = struct {
 	port: u16,
 	input: [os::BUFSZ]u8,
 
-	map: *game::map,
+	map: nullable *game::map,
 	player: nullable *game::player,
 };
 
@@ -132,12 +132,11 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 		sock = sock,
 		addr = addr,
 		port = port,
-		map = game::newmap(),
 		...
 	});
 	append(server.clients, client);
 	ev::setuser(client.sock, client);
-	ev::write(client.sock, &client_noop, strings::toutf8(strings::concat(client.map.welcome, client.map.currarea.dialog, game::PROMPT)));
+	ev::write(client.sock, &client_noop, strings::toutf8(strings::concat(game::WELCOME, game::PROMPT)));
 	ev::read(client.sock, &client_read, client.input);
 	ev::accept(server.sock, &server_accept);
 };
@@ -167,6 +166,30 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 		case game::action::QUIT =>
 			client_close(client);
 			return;
+		case game::action::ABOUT =>
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::ABOUT, game::PROMPT)));
+		case game::action::HELP =>
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::help(), game::PROMPT)));
+		case game::action::LOAD =>
+			let response = match (client.player) {
+			case let p: *game::player =>
+				let key = fmt::asprintf("{}:game", p.nick);
+				let map = match(bitcask::get(client.server.db, key)) {
+				case void =>
+					yield game::newmap();
+				case let val: []u8 =>
+					let (mid, aid) = strings::cut(strings::fromutf8_unsafe(val), ":");
+					yield game::loadmap(mid, aid);
+				};
+
+				client.map = map;
+
+				yield map.currarea.dialog;
+			case null =>
+				yield "Use NICK <name> to identify yourself before attempting to load a game.";
+			};
+
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 		case game::action::NICK =>
 			let response = match(nick(client, cmd.1)) {
 			case let p: *game::player =>
@@ -180,7 +203,30 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 		case =>
-			let response = game::exec_command(client.map, cmd);
+			let response = match(client.map) {
+			case let map: *game::map =>
+				let response = game::exec_command(map, cmd);
+
+				match (client.player) {
+				case let p: *game::player =>
+					let key = fmt::asprintf("{}:game", p.nick);
+					let val = strings::toutf8(strings::join(":", map.id, map.currarea.id));
+
+					match (bitcask::put(client.server.db, key, val)) {
+					case let err: bitcask::error =>
+						log::println("error saving currmap to db: ", bitcask::strerror(err));
+					case =>
+						yield;
+					};
+				case =>
+					yield;
+				};
+
+				yield response;
+			case null =>
+				yield "No game loaded";
+			};
+
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 		};
 	case =>
@@ -221,8 +267,14 @@ fn client_close(client: *client) void = {
 		"client_addr", ip::string(client.addr),
 		"client_port", client.port);
 	ev::close(client.sock);
-	free(client.map.currarea.adjacent);
-	free(client.map.currarea);
+
+	match (client.map) {
+	case let m: *game::map =>
+		free(m.currarea.adjacent);
+		free(m.currarea);
+	case null =>
+		yield;
+	};
 	free(client.player);
 	free(client);
 };

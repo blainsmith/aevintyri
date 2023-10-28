@@ -1,6 +1,8 @@
 use log;
 
-const ABOUT: str = `Ævintýri
+export const WELCOME: str = "+----------------------+\n| Welcome to Ævintýri! |\n+----------------------+";
+
+export const ABOUT: str = `Ævintýri
 
 Developed by:
   Blain
@@ -12,18 +14,22 @@ Built with:
 
 Open source libraries:
   https://git.sr.ht/~sircmpwn/hare-ev
+  https://git.sr.ht/~sircmpwn/hare-json
   https://git.sr.ht/~chrisppy/hare-scfg
+  https://git.sr.ht/~blainsmith/hare-bitcask
   https://git.sr.ht/~blainsmith/hare-logfmt`;
 
 export const PROMPT: str = "\n\n» ";
 
 export type map = struct {
-	welcome: str,
+	id: str,
+	allareas: []*area,
 	currarea: *area,
 	inventory: []str,
 };
 
 export type area = struct {
+	id: str,
 	name: str,
 	dialog: str,
 
@@ -33,9 +39,10 @@ export type area = struct {
 };
 
 export fn newmap() *map = {
-	let forest = alloc(area { name = "Wooded Forest", dialog = "You find yourself alone in a wooded forest. To the EAST you see a dim light.", ... });
-	let streetlight = alloc(area { name = "Street Light", dialog = "You come to a clearing and come upon a street light at the end of the clearing. The road runs NORTH to SOUTH and has no cars in sight.", ... });
+	let forest = alloc(area { id = "wf", name = "Wooded Forest", dialog = "You find yourself alone in a wooded forest. To the EAST you see a dim light.", ... });
+	let streetlight = alloc(area { id = "sl", name = "Street Light", dialog = "You come to a clearing and come upon a street light at the end of the clearing. The road runs NORTH to SOUTH and has no cars in sight.", ... });
 	let container = alloc(area {
+		id = "c",
 		name = "Shipping Container",
 		dialog = "You make your way up the street and stop next to a rusted out shipping container. The door is open.",
 		subarea = ("container floor", "The floor is covered in blood and a human hand holding an old iron key."),
@@ -47,11 +54,22 @@ export fn newmap() *map = {
 	adjacent(streetlight, direction::NORTH, container);
 
 	let m = alloc(map {
-		welcome = "+----------------------+\n| Welcome to Ævintýri! |\n+----------------------+\n\n",
+		id = "zombie.script",
+		allareas = alloc([forest, streetlight, container]),
 		currarea = forest,
 		...
 	});
 
+	return m;
+};
+
+export fn loadmap(mid: str, aid: str) *map = {
+	let m = newmap();
+	for (let i = 0z; i < len(m.allareas); i += 1) {
+		if (m.allareas[i].id == aid) {
+			m.currarea = m.allareas[i];
+		};
+	};
 	return m;
 };
 
@@ -81,7 +99,15 @@ export fn pick(m: *map, i: str) (str | void) = {
 };
 
 export fn help() str = {
-	return "move <direction>\nlook <direction>\npick <item-name>\nuse <item-name>\nquit\nhelp\nabout";
+	return `nick <name> - identify yourself as <name>
+load - loads your previously saved area
+move <direction> - move in the given direction
+look <object> - look at specific object to inspect it
+pick <item> - pick up an item
+use <item> - use an item
+quit - quit the game and disconnect
+help - prints this help text
+about - show information about the game`;
 };
 
 export fn adjacent(a: *area, d: direction, b: *area) void = {
