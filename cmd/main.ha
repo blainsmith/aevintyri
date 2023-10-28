@@ -1,8 +1,11 @@
 use bytes;
+use dirs;
 use errors;
+use fmt;
 use getopt;
 use io;
 use log;
+use memio;
 use net;
 use net::ip;
 use net::tcp;
@@ -15,6 +18,8 @@ use fmt;
 
 use game;
 
+use vendor::bitcask;
+use vendor::encoding::json;
 use vendor::ev;
 use vendor::log::logfmt;
 
@@ -22,6 +27,7 @@ type server = struct {
 	loop: *ev::loop,
 	sock: *ev::file,
 	clients: []*client,
+	db: *bitcask::db,
 	exit: int,
 };
 
@@ -35,6 +41,7 @@ type client = struct {
 	messages: *game::messageQueue,
 
 	map: *game::map,
+	player: nullable *game::player,
 };
 
 export fn main() void = {
@@ -44,11 +51,13 @@ export fn main() void = {
 	const cmd = getopt::parse(os::args, "Ævintýri",
 		('a', "addr", "host IP address to bind to (default: 0.0.0.0)"),
 		('p', "port", "port to listen on (default: 7913)"),
+		('d', "dir", "directory to store database files (default: $XDG_DATA_HOME/.local/share/aevintyri)")
 	);
 	defer getopt::finish(&cmd);
 
 	let addr: ip::addr = ip::ANY_V4;
 	let port: u16 = 7913;
+	let dir: str = dirs::data("aevintyri");
 	for (let i = 0z; i < len(cmd.opts); i += 1) {
 		const opt = cmd.opts[i];
 		switch (opt.0) {
@@ -56,9 +65,19 @@ export fn main() void = {
 			addr = ip::parse(opt.1)!;
 		case 'p' =>
 			port = strconv::stou16(opt.1)!;
+		case 'd' =>
+			dir = strings::dup(opt.1);
 		case => abort();
 		};
 	};
+
+	let dbopts = bitcask::defaultopts;
+	dbopts.dir = dir;
+	let db = bitcask::new(dbopts)!;
+	defer bitcask::finish(db)!;
+
+	bitcask::merge(db)!;
+	log::println("dir", dbopts.dir);
 
 	const loop = ev::newloop()!;
 	defer ev::finish(&loop);
@@ -76,6 +95,7 @@ export fn main() void = {
 	let state = server {
 		loop = &loop,
 		sock = sock,
+		db = db,
 		...
 	};
 	ev::setuser(sock, &state);
@@ -148,21 +168,29 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 
 	match (game::parse_input(in)) {
 	case let cmd: game::command =>
-		if (cmd.0 == game::action::QUIT) {
+    let response = "";
+		switch (cmd.0) {
+		case game::action::QUIT =>
 			client_close(client);
 			return;
-		};
+		case game::action::NICK =>
+			response = match(nick(client, cmd.1)) {
+			case let p: *game::player =>
+				client.player = p;
+				yield fmt::asprintf("Welcome, {}!", p.nick);
+			case let err: json::error =>
+				yield json::strerror(err);
+			case let err: bitcask::error =>
+				yield bitcask::strerror(err);
+			};
 
-		let response = game::exec_command(client.map, cmd);
-
-		if (cmd.0 == game::action::SAY) {
-			broadcast_message(client, cmd.1);
+    case game::action::SAY =>
+      broadcast_message(client, cmd.1);
 			response = strings::concat("You say: ", cmd.1);
-			//ev::write(client.sock, &client_write, strings::toutf8(strings::concat("You say: ", cmd.1, game::PROMPT)));
-			//return;
+		case =>
+			response = game::exec_command(client.map, cmd);
 		};
-		
-		let queuesize = game::queuegetsize(client.messages);
+    let queuesize = game::queuegetsize(client.messages);
 		if (queuesize > 0) {
 			response = strings::concat(response, "\r\n\r\nYou have new messages:\r\n");
 			for (let i = 0z; i < queuesize; i += 1) {
@@ -170,7 +198,7 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 				response = strings::concat(response, "\t- ", msg, "\r\n");
 			};
 		};
-		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
+    ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 	case =>
 		ev::write(client.sock, &client_write, strings::toutf8(strings::concat("No idea what that means", game::PROMPT)));
 	};
@@ -211,8 +239,10 @@ fn client_close(client: *client) void = {
 	ev::close(client.sock);
 	free(client.map.currarea.adjacent);
 	free(client.map.currarea);
+	free(client.player);
 	free(client);
 };
+
 
 // Broadcasts a message from the given client to all other clients
 //
@@ -246,4 +276,24 @@ fn broadcast_cb(sock: *ev::file, r: (size | io::error)) void = {
 	case let n: size =>
 		yield n;
 	};
+
+fn nick(c: *client, n: str) (*game::player | json::error | bitcask::error) = {
+	let p = alloc(game::player { ... });
+	
+	match (bitcask::get(c.server.db, n)?) {
+	case let val: []u8 =>
+		game::decode_player(p, &memio::fixed(val))?;
+		log::println("scope", "decode_player", "player", p.nick);
+	case =>
+		p.nick = strings::dup(n);
+
+		let val = memio::dynamic();
+		defer io::close(&val)!;
+
+		game::encode_player(p, &val)?;
+		bitcask::put(c.server.db, n, memio::buffer(&val))?;
+		log::println("scope", "encode_player", "player", p.nick);
+	};
+
+	return p;
 };

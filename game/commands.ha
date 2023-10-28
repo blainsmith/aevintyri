@@ -42,6 +42,7 @@ export type action = enum {
 	LOOK,
 	PICK,
 	USE,
+	NICK,
 	QUIT,
 	HELP,
 	ABOUT,
@@ -54,6 +55,7 @@ export fn parseaction(s: str) (action | invalid) = {
 	case "look", "look at" => return action::LOOK;
 	case "pick", "take", "grab" => return action::PICK;
 	case "use" => return action::USE;
+	case "nick" => return action::NICK;
 	case "quit", "exit" => return action::QUIT;
 	case "help" => return action::HELP;
 	case "about" => return action::ABOUT;
@@ -74,6 +76,7 @@ export fn actionstr(a: action) str = {
 	case action::LOOK => return "look";
 	case action::PICK => return "pick";
 	case action::USE => return "use";
+	case action::NICK => return "nick";
 	case action::QUIT => return "quit";
 	case action::HELP => return "help";
 	case action::ABOUT => return "about";
@@ -127,6 +130,7 @@ export fn exec_command(map: *map, cmd: command) str = {
 		};
 		return i;
 	case action::USE => return "Not implemented";
+	case action::NICK => return "Wrong context";
 	case action::HELP => return help();
 	case action::QUIT => return "Not implemented";
 	case action::ABOUT => return ABOUT;
