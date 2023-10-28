@@ -23,12 +23,17 @@ export type opts = struct {
 	maxfilesz: size,
 };
 
-// Convenient settings for some default [[opt]] values.
+// Convenient settings for some default [[opts]] values.
 export let defaultopts = opts {
 	dir = ".",
 	maxfilesz = (1 << 32): size,
 };
 
+// This is the core database struct with all the options and file descriptors
+// needed to perform [[put]], [[get]], [[del]], and [[merge]] operations.
+//
+// Users should use [[new]] with some [[defaultopts]] to initialize a new [[db]]
+// struct to make it readdy for use.
 export type db = struct {
 	opts: opts,
 	keydir: *keydir,
@@ -36,12 +41,17 @@ export type db = struct {
 	df: *datafile,
 };
 
+// Error indicating that the record is invalid because the checksum does not
+// match.
 export type invalid = !void;
 
+// Error indicating the record has expired.
 export type expired = !time::instant;
 
+// Any error that might be an [[io::error]], [[fs::error]], or local error.
 export type error = !(...errors::error | fs::error | io::error | invalid | expired);
 
+// Converts a [[bitcask::error]] into a user-friendly string.
 export fn strerror(err: error) str = {
 	match (err) {
 	case invalid =>
@@ -206,9 +216,9 @@ export fn get(db: *db, key: str) ([]u8 | void | error) = {
 		return invalid;
 	};
 
-	if (record_expired(r)) {
-		return r.hdr.expiry: expired;
-	};
+	// if (record_expired(r)) {
+	// 	return r.hdr.expiry: expired;
+	// };
 
 	return r.val;
 };
@@ -267,4 +277,15 @@ export fn merge(db: *db) (void | error) = {
 		os::remove(strings::concat(db.opts.dir, "/", fmt::asprintf(DATAFILE, stalekeys[i])))?;
 		os::remove(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, stalekeys[i])))?;
 	};
+};
+
+@test fn new() void = {
+	let dir = temp::dir();
+	defer os::rmdirall(dir)!;
+
+	let opts = defaultopts;
+	opts.dir = dir;
+
+	let db = new(opts)!;
+	defer finish(db)!;
 };
