@@ -22,11 +22,11 @@ export fn directionstr(d: direction) str = {
 };
 
 export fn parsedirection(s: str) (direction | invalid) = {
-	switch (s) {
-	case "north", "NORTH" => return direction::NORTH;
-	case "south", "SOUTH" => return direction::SOUTH;
-	case "east", "EAST" => return direction::EAST;
-	case "west", "WEST" => return direction::WEST;
+	switch (ascii::strlower(s)) {
+	case "north", "n" => return direction::NORTH;
+	case "south", "s" => return direction::SOUTH;
+	case "east", "e" => return direction::EAST;
+	case "west", "w" => return direction::WEST;
 	case => return invalid;
 	};
 };
@@ -46,6 +46,7 @@ export type action = enum {
 	QUIT,
 	HELP,
 	ABOUT,
+	SAY,
 };
 
 export fn parseaction(s: str) (action | invalid) = {
@@ -58,6 +59,7 @@ export fn parseaction(s: str) (action | invalid) = {
 	case "quit", "exit" => return action::QUIT;
 	case "help" => return action::HELP;
 	case "about" => return action::ABOUT;
+	case "say", "talk" => return action::SAY;
 	case => return invalid;
 	};
 };
@@ -78,6 +80,7 @@ export fn actionstr(a: action) str = {
 	case action::QUIT => return "quit";
 	case action::HELP => return "help";
 	case action::ABOUT => return "about";
+	case action::SAY => return "say";
 	};
 };
 
@@ -131,6 +134,8 @@ export fn exec_command(map: *map, cmd: command) str = {
 	case action::HELP => return help();
 	case action::QUIT => return "Not implemented";
 	case action::ABOUT => return ABOUT;
+	case action::SAY =>
+		return cmd.1;
 	};
 };
 
