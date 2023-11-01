@@ -107,7 +107,7 @@ export fn pick(m: *map, i: str) (str | void) = {
 };
 
 export fn help() str = {
-	return "move <direction>\nlook <direction>\npick <item-name>\nuse <item-name>\nquit\nhelp\nabout";
+	return "move <direction>\nlook <direction>\npick <item-name>\nuse <item-name>\nsay <what-to-say> (talk to others in same area)\nquit\nhelp\nabout";
 };
 
 export fn adjacent(a: *area, d: direction, b: *area) void = {
@@ -118,6 +118,10 @@ export fn adjacent(a: *area, d: direction, b: *area) void = {
 	case direction::EAST => append(b.adjacent, (direction::WEST, a));
 	case direction::WEST => append(b.adjacent, (direction::EAST, a));
 	};
+};
+
+export fn areaequals(map1: *map, map2: *map) bool = {
+	return (map1.currarea.name == map2.currarea.name);
 };
 
 @test fn move() void = {

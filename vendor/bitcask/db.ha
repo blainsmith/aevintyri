@@ -23,12 +23,17 @@ export type opts = struct {
 	maxfilesz: size,
 };
 
-// Convenient settings for some default [[opt]] values.
+// Convenient settings for some default [[opts]] values.
 export let defaultopts = opts {
 	dir = ".",
 	maxfilesz = (1 << 32): size,
 };
 
+// This is the core database struct with all the options and file descriptors
+// needed to perform [[put]], [[get]], [[del]], and [[merge]] operations.
+//
+// Users should use [[new]] with some [[defaultopts]] to initialize a new [[db]]
+// struct to make it readdy for use.
 export type db = struct {
 	opts: opts,
 	keydir: *keydir,
@@ -36,11 +41,31 @@ export type db = struct {
 	df: *datafile,
 };
 
+// Error indicating that the record is invalid because the checksum does not
+// match.
 export type invalid = !void;
 
+// Error indicating the record has expired.
 export type expired = !time::instant;
 
+// Any error that might be an [[io::error]], [[fs::error]], or local error.
 export type error = !(...errors::error | fs::error | io::error | invalid | expired);
+
+// Converts a [[bitcask::error]] into a user-friendly string.
+export fn strerror(err: error) str = {
+	match (err) {
+	case invalid =>
+		return "Invalid record";
+	case expired =>
+		return "Expired record";
+	case let err: fs::error =>
+		return fs::strerror(err);
+	case let err: io::error =>
+		return io::strerror(err);
+	case let err: errors::error =>
+		return errors::strerror(err);
+	};
+};
 
 fn unixnano(i: time::instant) i64 = {
 	return (i.sec * 1e9) + i.nsec;
@@ -110,16 +135,18 @@ export fn new(opts: opts) (*db | error) = {
 // Frees and closes memory and file handles after encoding a hint file of the
 // [[keydir]] to disk.
 export fn finish(db: *db) (void | error) = {
-	match (os::create(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, db.df.id)), fs::mode::USER_RWX, fs::flag::WRONLY)) {
-	case let kdf: io::file =>
-		keydir_encode(db.keydir, kdf)?;
-	case fs::error =>
-		yield;
-	};
+	let kdf = os::create(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, db.df.id)), fs::mode::USER_RWX, fs::flag::WRONLY)?;
+	keydir_encode(db.keydir, kdf)?;
 
 	keydir_finish(db.keydir);
 	stale_finish(db.stale);
 	datafile_finish(db.df)!;
+};
+
+// Return all keys in the database. Call must use [[strings::dupall]] to free
+// the return value.
+export fn keys(db: *db) ([]str | void) = {
+	return keydir_keys(db.keydir);
 };
 
 // Puts a key/value into the [[db]].
@@ -189,9 +216,9 @@ export fn get(db: *db, key: str) ([]u8 | void | error) = {
 		return invalid;
 	};
 
-	if (record_expired(r)) {
-		return r.hdr.expiry: expired;
-	};
+	// if (record_expired(r)) {
+	// 	return r.hdr.expiry: expired;
+	// };
 
 	return r.val;
 };
@@ -208,10 +235,6 @@ fn rotate(db: *db) (void | error) = {
 	if (!datafile_full(db.df, db.opts.maxfilesz)) {
 		return;
 	};
-
-	let kdf = os::create(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, db.df.id)), fs::mode::USER_RWX, fs::flag::WRONLY)?;
-	keydir_encode(db.keydir, kdf)?;
-	io::close(kdf)?;
 
 	let fid = gendatafileid();
 	let df = newdatafile(db.opts.dir, fid)?;
@@ -254,4 +277,15 @@ export fn merge(db: *db) (void | error) = {
 		os::remove(strings::concat(db.opts.dir, "/", fmt::asprintf(DATAFILE, stalekeys[i])))?;
 		os::remove(strings::concat(db.opts.dir, "/", fmt::asprintf(HINTFILE, stalekeys[i])))?;
 	};
+};
+
+@test fn new() void = {
+	let dir = temp::dir();
+	defer os::rmdirall(dir)!;
+
+	let opts = defaultopts;
+	opts.dir = dir;
+
+	let db = new(opts)!;
+	defer finish(db)!;
 };
