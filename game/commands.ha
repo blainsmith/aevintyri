@@ -16,6 +16,15 @@ export type direction = enum {
 	WEST,
 };
 
+export fn directioninv(d: direction) direction = {
+	switch (d) {
+	case direction::NORTH => return direction::SOUTH;
+	case direction::SOUTH => return direction::NORTH;
+	case direction::EAST => return direction::EAST;
+	case direction::WEST => return direction::WEST;
+	};
+};
+
 export fn directionstr(d: direction) str = {
 	switch (d) {
 	case direction::NORTH => return "north";

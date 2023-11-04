@@ -28,6 +28,7 @@ type server = struct {
 	sock: *ev::file,
 	clients: []*client,
 	db: *bitcask::db,
+	map: *game::map,
 	exit: int,
 };
 
@@ -114,6 +115,7 @@ export fn main() void = {
 		loop = &loop,
 		sock = sock,
 		db = db,
+		map = map,
 		...
 	};
 	ev::setuser(sock, &state);
@@ -155,7 +157,7 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 		addr = addr,
 		port = port,
 		messages = game::newqueue(),
-		map = game::newmap(),
+		map = game::map_dup(server.map),
 		...
 	});
 	append(server.clients, client);

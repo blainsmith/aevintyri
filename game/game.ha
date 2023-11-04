@@ -2,6 +2,8 @@ use errors;
 use fmt;
 use io;
 use log;
+use os;
+use strings;
 
 use vendor::format::scfg;
 
@@ -37,9 +39,14 @@ export type area = struct {
 	item: (str, str),
 };
 
-export fn parse(f: io::handle) (*map | scfg::error) = {
+export fn parse(f: io::handle) (*map | scfg::error | error) = {
 	let scn = scfg::scan(f);
 	defer scfg::finish(&scn);
+
+	let a = -1;
+	let areas: []*area = [];
+	let dirs: [](str, direction, str) = [];
+	let welcome = "";
 
 	for (true) {
 		let directive = match (scfg::next(&scn)?) {
@@ -49,36 +56,75 @@ export fn parse(f: io::handle) (*map | scfg::error) = {
 			yield d;
 		};
 
-		fmt::printfln("directive ({}, {})", directive.0, directive.1)!;
+		switch (directive.1) {
+		case "welcome" =>
+			welcome = directive.2[0];
+		case "area" =>
+			a += 1;
+			let area = alloc(area {
+				name = strings::dup(directive.2[0]),
+				...
+			});
+			append(areas, area);
+		case "dialog" =>
+			areas[a].dialog = strings::dup(directive.2[0]);
+		case "subarea" =>
+			areas[a].subarea = (strings::dup(directive.2[0]), strings::dup(directive.2[1]));
+		case "item" =>
+			areas[a].item = (strings::dup(directive.2[0]), strings::dup(directive.2[1]));
+		case "north", "south", "east", "west" =>
+			let dir = match (parsedirection(directive.1)) {
+			case let i: invalid =>
+				return i;
+			case let d: direction =>
+				yield d;
+			};
 
-		// Use "d" to start building a "map"
+			append(dirs, (areas[a].name, dir, directive.2[0]));
+		case =>
+			yield;
+		};
 	};
 
-	// Should return some "map" that was built from the loop above.
-	return newmap();
+	for (let d = 0z; d < len(dirs); d += 1) {
+		let a1 = getarea(areas, dirs[d].0) as *area;
+		let a2 = getarea(areas, dirs[d].2) as *area;
+
+		adjacent(a1, dirs[d].1, a2);
+	};
+
+	return alloc(map {
+		welcome = strings::dup(strings::concat(welcome, "\n\n")),
+		currarea = areas[0],
+		...
+	});
 };
 
-export fn newmap() *map = {
-	let forest = alloc(area { name = "Wooded Forest", dialog = "You find yourself alone in a wooded forest. To the EAST you see a dim light.", ... });
-	let streetlight = alloc(area { name = "Street Light", dialog = "You come to a clearing and come upon a street light at the end of the clearing. The road runs NORTH to SOUTH and has no cars in sight.", ... });
-	let container = alloc(area {
-		name = "Shipping Container",
-		dialog = "You make your way up the street and stop next to a rusted out shipping container. The door is open.",
-		subarea = ("container floor", "The floor is covered in blood and a human hand holding an old iron key."),
-		item = ("old iron key", "You pick up the bloody key and place it into you pocket."),
+fn getarea(areas: []*area, name: str) (*area | void) = {
+	for (let a = 0z; a < len(areas); a += 1) {
+		if (areas[a].name == name) {
+			return areas[a];
+		};
+	};
+	return;
+};
+
+@test fn parse() void = {
+	let script = os::open("./scripts/zombie.script")!;
+	let map = parse(script)!;
+	assert(map.welcome == "TBD");
+	assert(map.currarea.name == "Wooded Forest");
+	assert(map.currarea.adjacent[0].1.name == "Street Light");
+	assert(map.currarea.adjacent[0].1.adjacent[1].1.name == "Shipping Container");
+	assert(map.currarea.adjacent[0].1.adjacent[2].1.name == "Car Accident");
+};
+
+export fn map_dup(m: *map) *map = {
+	return alloc(map {
+		welcome = strings::dup(m.welcome),
+		currarea = alloc(*m.currarea),
 		...
 	});
-
-	adjacent(forest, direction::EAST, streetlight);
-	adjacent(streetlight, direction::NORTH, container);
-
-	let m = alloc(map {
-		welcome = "+----------------------+\n| Welcome to Ævintýri! |\n+----------------------+\n\n",
-		currarea = forest,
-		...
-	});
-
-	return m;
 };
 
 export fn move(m: *map, d: direction) void = {
