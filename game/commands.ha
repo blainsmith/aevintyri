@@ -1,15 +1,28 @@
+use errors;
+use io;
 use strings;
 use ascii;
 
+use vendor::format::scfg;
+
 export type invalid = !void;
 
-export type error = !invalid;
+export type error = !(...errors::error | io::error | scfg::error | invalid);
 
 export type direction = enum {
 	NORTH,
 	SOUTH,
 	EAST,
 	WEST,
+};
+
+export fn directioninv(d: direction) direction = {
+	switch (d) {
+	case direction::NORTH => return direction::SOUTH;
+	case direction::SOUTH => return direction::NORTH;
+	case direction::EAST => return direction::EAST;
+	case direction::WEST => return direction::WEST;
+	};
 };
 
 export fn directionstr(d: direction) str = {
