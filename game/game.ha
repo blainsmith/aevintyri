@@ -71,6 +71,7 @@ export fn parse(f: io::handle) (*map | scfg::error | error) = {
 		case "subarea" =>
 			areas[a].subarea = (strings::dup(directive.2[0]), strings::dup(directive.2[1]));
 		case "item" =>
+		//how does it split the item into its name and dialog? add a hidden param after some identifier symbol
 			areas[a].item = (strings::dup(directive.2[0]), strings::dup(directive.2[1]));
 		case "north", "south", "east", "west" =>
 			let dir = match (parsedirection(directive.1)) {
