@@ -41,7 +41,7 @@ type client = struct {
 
 	messages: *game::messageQueue,
 
-	map: *game::map,
+	map: nullable *game::map,
 	player: nullable *game::player,
 };
 
@@ -162,7 +162,7 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 	});
 	append(server.clients, client);
 	ev::setuser(client.sock, client);
-	ev::write(client.sock, &client_noop, strings::toutf8(strings::concat(client.map.welcome, client.map.currarea.dialog, game::PROMPT)));
+	ev::write(client.sock, &client_noop, strings::toutf8(strings::concat(game::WELCOME, game::PROMPT)));
 	ev::read(client.sock, &client_read, client.input);
 	ev::accept(server.sock, &server_accept);
 };
@@ -194,6 +194,30 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 		case game::action::QUIT =>
 			client_close(client);
 			return;
+		case game::action::ABOUT =>
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::ABOUT, game::PROMPT)));
+		case game::action::HELP =>
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::help(), game::PROMPT)));
+		case game::action::LOAD =>
+			let response = match (client.player) {
+			case let p: *game::player =>
+				let key = fmt::asprintf("{}:game", p.nick);
+				let map = client.map as *game::map;
+
+				match(bitcask::get(client.server.db, key)) {
+				case void =>
+					yield;
+				case let val: []u8 =>
+					let (mid, aid) = strings::cut(strings::fromutf8_unsafe(val), ":");
+					game::map_loadarea(map, aid);
+				};
+
+				yield map.currarea.dialog;
+			case null =>
+				yield "Use NICK <name> to identify yourself before attempting to load a game.";
+			};
+
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 		case game::action::NICK =>
 			response = match(nick(client, cmd.1)) {
 			case let p: *game::player =>
@@ -208,7 +232,31 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			broadcast_message(client, cmd.1);
 			response = strings::concat("You say: ", cmd.1);
 		case =>
-			response = game::exec_command(client.map, cmd);
+			let response = match(client.map) {
+			case let map: *game::map =>
+				let response = game::exec_command(map, cmd);
+
+				match (client.player) {
+				case let p: *game::player =>
+					let key = fmt::asprintf("{}:game", p.nick);
+					let val = strings::toutf8(strings::join(":", map.id, map.currarea.id));
+
+					match (bitcask::put(client.server.db, key, val)) {
+					case let err: bitcask::error =>
+						log::println("error saving currmap to db: ", bitcask::strerror(err));
+					case =>
+						yield;
+					};
+				case =>
+					yield;
+				};
+
+				yield response;
+			case null =>
+				yield "No game loaded";
+			};
+
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 		};
 
 		let queuesize = game::queuegetsize(client.messages);
@@ -259,8 +307,14 @@ fn client_close(client: *client) void = {
 		"client_addr", ip::string(client.addr),
 		"client_port", client.port);
 	ev::close(client.sock);
-	free(client.map.currarea.adjacent);
-	free(client.map.currarea);
+
+	match (client.map) {
+	case let m: *game::map =>
+		free(m.currarea.adjacent);
+		free(m.currarea);
+	case null =>
+		yield;
+	};
 	free(client.player);
 	free(client);
 };
@@ -274,11 +328,12 @@ fn client_close(client: *client) void = {
 // * `message` - The message being broadcasted
 fn broadcast_message(client: *client, message: str) void = {
 	const server = client.server;
+	const map = client.map as *game::map;
+
 	for (let i = 0z; i < len(server.clients); i += 1) {
 		if (server.clients[i] != client) {
-			if (game::areaequals(server.clients[i].map, client.map)) {
-			//fmt::println(message)!;
-			game::queueadd(server.clients[i].messages, strings::concat("(", client.map.currarea.name, ") Someone said: ", message));
+			if (game::areaequals(server.clients[i].map as *game::map, map)) {
+				game::queueadd(server.clients[i].messages, strings::concat("(", map.currarea.name, ") Someone said: ", message));
 			};
 		};
 	};
