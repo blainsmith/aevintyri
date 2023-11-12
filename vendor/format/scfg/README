@@ -1,0 +1,4 @@
+format::scfg provides a simple parser of the simple configuration file format
+specification as defined by https://git.sr.ht/~emersion/scfg. The [[scanner]]
+is created using [[scan]] and the next [[directive]] is returned using [[next]].
+Note the [[scanner]] will need to be freed using [[finish]].

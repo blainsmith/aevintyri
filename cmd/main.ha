@@ -2,6 +2,7 @@ use bytes;
 use dirs;
 use errors;
 use fmt;
+use fs;
 use getopt;
 use io;
 use log;
@@ -19,6 +20,7 @@ use game;
 use vendor::bitcask;
 use vendor::encoding::json;
 use vendor::ev;
+use vendor::format::scfg;
 use vendor::log::logfmt;
 
 type server = struct {
@@ -26,6 +28,7 @@ type server = struct {
 	sock: *ev::file,
 	clients: []*client,
 	db: *bitcask::db,
+	map: *game::map,
 	exit: int,
 };
 
@@ -35,6 +38,8 @@ type client = struct {
 	addr: ip::addr,
 	port: u16,
 	input: [os::BUFSZ]u8,
+
+	messages: *game::messageQueue,
 
 	map: nullable *game::map,
 	player: nullable *game::player,
@@ -47,12 +52,14 @@ export fn main() void = {
 	const cmd = getopt::parse(os::args, "Ævintýri",
 		('a', "addr", "host IP address to bind to (default: 0.0.0.0)"),
 		('p', "port", "port to listen on (default: 7913)"),
-		('d', "dir", "directory to store database files (default: $XDG_DATA_HOME/.local/share/aevintyri)")
+		('s', "script", "script file to load (default: ./scripts/zombie.script)"),
+		('d', "dir", "directory to store database files (default: $XDG_DATA_HOME/.local/share/aevintyri)"),
 	);
 	defer getopt::finish(&cmd);
 
 	let addr: ip::addr = ip::ANY_V4;
 	let port: u16 = 7913;
+	let script: str = "./scripts/zombie.script";
 	let dir: str = dirs::data("aevintyri");
 	for (let i = 0z; i < len(cmd.opts); i += 1) {
 		const opt = cmd.opts[i];
@@ -61,10 +68,26 @@ export fn main() void = {
 			addr = ip::parse(opt.1)!;
 		case 'p' =>
 			port = strconv::stou16(opt.1)!;
+		case 's' =>
+			script = opt.1;
 		case 'd' =>
 			dir = strings::dup(opt.1);
 		case => abort();
 		};
+	};
+
+	let scriptfile = match (os::open(script)) {
+	case let err: fs::error =>
+		log::fatalf("error: {}", fs::strerror(err));
+	case let f: io::file =>
+		yield f;
+	};
+
+	let map = match (game::parse(scriptfile)) {
+	case let err: scfg::error =>
+		log::fatalf("error: {}", scfg::strerror(err));
+	case let m: *game::map =>
+		yield m;
 	};
 
 	let dbopts = bitcask::defaultopts;
@@ -92,6 +115,7 @@ export fn main() void = {
 		loop = &loop,
 		sock = sock,
 		db = db,
+		map = map,
 		...
 	};
 	ev::setuser(sock, &state);
@@ -132,6 +156,8 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 		sock = sock,
 		addr = addr,
 		port = port,
+		messages = game::newqueue(),
+		map = game::map_dup(server.map),
 		...
 	});
 	append(server.clients, client);
@@ -162,6 +188,8 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 
 	match (game::parse_input(in)) {
 	case let cmd: game::command =>
+		let response = "";
+
 		switch (cmd.0) {
 		case game::action::QUIT =>
 			client_close(client);
@@ -174,15 +202,15 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			let response = match (client.player) {
 			case let p: *game::player =>
 				let key = fmt::asprintf("{}:game", p.nick);
-				let map = match(bitcask::get(client.server.db, key)) {
+				let map = client.map as *game::map;
+
+				match(bitcask::get(client.server.db, key)) {
 				case void =>
-					yield game::newmap();
+					yield;
 				case let val: []u8 =>
 					let (mid, aid) = strings::cut(strings::fromutf8_unsafe(val), ":");
-					yield game::loadmap(mid, aid);
+					game::map_loadarea(map, aid);
 				};
-
-				client.map = map;
 
 				yield map.currarea.dialog;
 			case null =>
@@ -191,7 +219,7 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 		case game::action::NICK =>
-			let response = match(nick(client, cmd.1)) {
+			response = match(nick(client, cmd.1)) {
 			case let p: *game::player =>
 				client.player = p;
 				yield fmt::asprintf("Welcome, {}!", p.nick);
@@ -200,8 +228,9 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			case let err: bitcask::error =>
 				yield bitcask::strerror(err);
 			};
-
-			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
+		case game::action::SAY =>
+			broadcast_message(client, cmd.1);
+			response = strings::concat("You say: ", cmd.1);
 		case =>
 			let response = match(client.map) {
 			case let map: *game::map =>
@@ -229,6 +258,17 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 		};
+
+		let queuesize = game::queuegetsize(client.messages);
+		if (queuesize > 0) {
+			response = strings::concat(response, "\r\n\r\nYou have new messages:\r\n");
+			for (let i = 0z; i < queuesize; i += 1) {
+				let msg = game::queueremove(client.messages) as str;
+				response = strings::concat(response, "\t- ", msg, "\r\n");
+			};
+		};
+
+		ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 	case =>
 		ev::write(client.sock, &client_write, strings::toutf8(strings::concat("No idea what that means", game::PROMPT)));
 	};
@@ -277,6 +317,42 @@ fn client_close(client: *client) void = {
 	};
 	free(client.player);
 	free(client);
+};
+
+
+// Broadcasts a message from the given client to all other clients
+//
+// # Arguments
+//
+// * `client` - The client saying the message
+// * `message` - The message being broadcasted
+fn broadcast_message(client: *client, message: str) void = {
+	const server = client.server;
+	const map = client.map as *game::map;
+
+	for (let i = 0z; i < len(server.clients); i += 1) {
+		if (server.clients[i] != client) {
+			if (game::areaequals(server.clients[i].map as *game::map, map)) {
+				game::queueadd(server.clients[i].messages, strings::concat("(", map.currarea.name, ") Someone said: ", message));
+			};
+		};
+	};
+};
+
+// Callback for Broadcast Message
+fn broadcast_cb(sock: *ev::file, r: (size | io::error)) void = {
+	const client = ev::getuser(sock): *client;
+	const n = match (r) {
+	case let err: io::error =>
+		log::println("scope", "client_write",
+			"client_addr", ip::string(client.addr),
+			"client_port", client.port,
+			"error", io::strerror(err));
+		client_close(client);
+		return;
+	case let n: size =>
+		yield n;
+	};
 };
 
 fn nick(c: *client, n: str) (*game::player | json::error | bitcask::error) = {

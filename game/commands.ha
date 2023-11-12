@@ -1,15 +1,28 @@
+use errors;
+use io;
 use strings;
 use ascii;
 
+use vendor::format::scfg;
+
 export type invalid = !void;
 
-export type error = !invalid;
+export type error = !(...errors::error | io::error | scfg::error | invalid);
 
 export type direction = enum {
 	NORTH,
 	SOUTH,
 	EAST,
 	WEST,
+};
+
+export fn directioninv(d: direction) direction = {
+	switch (d) {
+	case direction::NORTH => return direction::SOUTH;
+	case direction::SOUTH => return direction::NORTH;
+	case direction::EAST => return direction::EAST;
+	case direction::WEST => return direction::WEST;
+	};
 };
 
 export fn directionstr(d: direction) str = {
@@ -22,11 +35,11 @@ export fn directionstr(d: direction) str = {
 };
 
 export fn parsedirection(s: str) (direction | invalid) = {
-	switch (s) {
-	case "north", "NORTH" => return direction::NORTH;
-	case "south", "SOUTH" => return direction::SOUTH;
-	case "east", "EAST" => return direction::EAST;
-	case "west", "WEST" => return direction::WEST;
+	switch (ascii::strlower(s)) {
+	case "north", "n" => return direction::NORTH;
+	case "south", "s" => return direction::SOUTH;
+	case "east", "e" => return direction::EAST;
+	case "west", "w" => return direction::WEST;
 	case => return invalid;
 	};
 };
@@ -47,6 +60,7 @@ export type action = enum {
 	QUIT,
 	HELP,
 	ABOUT,
+	SAY,
 };
 
 export fn parseaction(s: str) (action | invalid) = {
@@ -60,6 +74,7 @@ export fn parseaction(s: str) (action | invalid) = {
 	case "quit", "exit" => return action::QUIT;
 	case "help" => return action::HELP;
 	case "about" => return action::ABOUT;
+	case "say", "talk" => return action::SAY;
 	case => return invalid;
 	};
 };
@@ -81,6 +96,7 @@ export fn actionstr(a: action) str = {
 	case action::QUIT => return "quit";
 	case action::HELP => return "help";
 	case action::ABOUT => return "about";
+	case action::SAY => return "say";
 	};
 };
 
@@ -130,8 +146,12 @@ export fn exec_command(map: *map, cmd: command) str = {
 		};
 		return i;
 	case action::USE => return "Not implemented";
-	case =>
-		return "Wrong context";
+	case action::NICK => return "Wrong context";
+	case action::HELP => return help();
+	case action::QUIT => return "Not implemented";
+	case action::ABOUT => return ABOUT;
+	case action::SAY => return cmd.1;
+	case => return "Wrong context";
 	};
 };
 
