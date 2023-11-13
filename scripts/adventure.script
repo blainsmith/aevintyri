@@ -1,0 +1,76 @@
+welcome "Waking World"
+
+area "Jail Cell" {
+    dialog "You find yourself in a prison cell of some sort. Its quiet eerily quiet, not the faintest sign of life."
+    item "warped hooked shaped board" dialog "You pick up the strange looking board. It almost looks as if it could pick something up."
+    subarea "between the prison bars" "Between the old rusted bars you spot a corpse of what looks to be a guard. On his side you spot a key ring."
+    south "Northern Prison Wing"
+}
+
+area "Northern Prison Wing" {
+    dialog "You enter a corridor filled with equally empty cells. Sketetons of guards and prisoners alike strewn about. However, there is no sign of a struggle."
+    east "Hall Cell"
+    south "Main Hall"
+}
+
+area "Hall Cell" {
+    dialog "You enter one of the many cells that line the corridor. This one in particular calls to you. In it you find a skeleton who appears to be holding something shiny."
+    item "Sealed Locket" dialog "You pick up beautiful golden locket, however no matter how hard to try, you can't seem to force it open."
+    west "Northern Prison Wing"
+}
+
+area "Main Hall" {
+    dialog "You enter the what appears to be the crossroads of the prison with four large doors staged one in each direction."
+    north "Northern Prison Wing"
+    south "Large Locked Doors"
+    east "Wardens Office"
+    west "Western Prison Wing"
+}
+
+area "Wardens Office" {
+    dialog "You enter what appears to be the office of the prisons warden. Censues, ledgers and all manner of documents lay about the rooms floors and on the central desk."
+    subarea "Wardens Desk" "The wardens desk has many draws one of which houses a peculiar looking key."
+    item "Wardens Master Key" dialog "You pick up the rusty old key and place it in your pocket. Perhaps this is you ticket out of this retched place."
+    west "Main Hall"
+}
+
+area "Large Locked Doors" {
+    dialog "You approach the magnificent heavy oak doors. The draft coming from the other side suggests that these doors lead outside. However, the appear to be too heavy to force open."
+    north "Main Hall"
+    south "Prison Courtyard"
+}
+
+area "Western Prison Wing" {
+    dialog "You enter a familar looking room hall. This wing appears to be identical to the North Wing; however you notice a door to the south that appears to lead outside."
+    east "Main Hall"
+    north "Guards Barracks"
+    South "Exterior Cell"
+}
+
+area "Exterior Cell" {
+    dialog "You stand before a cell all by itself outside the confines of the western wing. However, it is far from the escape route you intially thought." You stand before another cell; however, this one is different you can feel it."
+    north "Western Prison Wing"
+    south "Inside Exterior Cell"
+}
+
+area "Inside Exterior Cell" {
+    dialog "As you enter the cell you find yourself standing before a massive skeleton. His uniform is different from that of the other guards. This must be the warden and hes been reanimated."
+    item "Wardens Office Key" dialog "You manage steal the key off the warden without being detected and place it in your pocket.
+    north "Exterior Cell"
+}
+
+area "Guards Barracks" {
+    dialog "You enter what appears to be the barracks of the prisons guards. Several weapons are place on racks, but look to rusty to be usable."
+    south "Western Prison Wing"
+    item "Old Rusty Mace" dialog "You find an old rusty mace. It looks like its on the verge of breaking, but could still do some serious damage."
+}
+
+area "Prison Courtyard" {
+    dialog "You find yourself outside the great walls of what used to be your prison. In the distance you spot a magnificent looking city although something doesn't appear to be right with it."
+    south "City Outskirts"
+}
+
+area "City Outskirts" {
+    dialog "This area is unfinished and you are now trapped here. Sorry!"
+}
+
