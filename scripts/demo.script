@@ -1,0 +1,3 @@
+welcome "This is a demo script with no areas"
+
+area "Nowhere" {}
