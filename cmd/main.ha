@@ -76,7 +76,12 @@ export fn main() void = {
 		};
 	};
 
-	let maps = game::mapsinit(scripts)!;
+	let maps = match(game::mapsinit(scripts)) {
+	case let m: [](str, *game::map) => yield m;
+	case let err: fs::error => log::fatalf("error: {}", fs::strerror(err));
+	case let err: scfg::error => log::fatalf("error: {}", scfg::strerror(err));
+	case game::error => log::fatal("error");
+	};
 
 	let dbopts = bitcask::defaultopts;
 	dbopts.dir = dir;
@@ -144,6 +149,7 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 		sock = sock,
 		addr = addr,
 		port = port,
+		map = game::map_dup(server.maps[0].1),
 		messages = game::newqueue(),
 		...
 	});
@@ -185,9 +191,21 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::ABOUT, game::PROMPT)));
 		case game::action::HELP =>
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::help(), game::PROMPT)));
-		case game::action::SHOW =>
-			for (let i = 0z; i < len(client.server.maps); i += 1) {
-				response = strings::concat(response, client.server.maps[i].0, " - ", client.server.maps[i].1.welcome, "\n");
+		case game::action::PLAY =>
+			if (cmd.1 == "") {
+				response = strings::concat(response, "What would you like to play? (ex. > play adventure.script)\n\n");
+				for (let i = 0z; i < len(client.server.maps); i += 1) {
+					response = strings::concat(response, client.server.maps[i].0, " - ", client.server.maps[i].1.welcome, "\n");
+				};
+			} else {
+				for (let i = 0z; i < len(client.server.maps); i += 1) {
+					if (client.server.maps[i].0 == cmd.1) {
+						client.map = game::map_dup(client.server.maps[i].1);
+					};
+				};
+
+				const map = client.map as *game::map;
+				response = map.currarea.dialog;
 			};
 		case game::action::LOAD =>
 			let response = match (client.player) {
@@ -248,6 +266,7 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			};
 
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
+			return;
 		};
 
 		let queuesize = game::queuegetsize(client.messages);
@@ -282,6 +301,8 @@ fn client_write(sock: *ev::file, r: (size | io::error)) void = {
 	case let n: size =>
 		yield n;
 	};
+
+	log::println("client_write", n);
 
 	ev::read(client.sock, &client_read, client.input);
 };

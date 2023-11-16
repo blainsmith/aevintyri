@@ -48,14 +48,14 @@ area "Western Prison Wing" {
 }
 
 area "Exterior Cell" {
-    dialog "You stand before a cell all by itself outside the confines of the western wing. However, it is far from the escape route you intially thought." You stand before another cell; however, this one is different you can feel it."
+    dialog "You stand before a cell all by itself outside the confines of the western wing. However, it is far from the escape route you intially thought. You stand before another cell; however, this one is different you can feel it."
     north "Western Prison Wing"
     south "Inside Exterior Cell"
 }
 
 area "Inside Exterior Cell" {
     dialog "As you enter the cell you find yourself standing before a massive skeleton. His uniform is different from that of the other guards. This must be the warden and hes been reanimated."
-    item "Wardens Office Key" dialog "You manage steal the key off the warden without being detected and place it in your pocket.
+    item "Wardens Office Key" "You manage steal the key off the warden without being detected and place it in your pocket."
     north "Exterior Cell"
 }
 
