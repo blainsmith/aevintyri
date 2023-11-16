@@ -302,8 +302,6 @@ fn client_write(sock: *ev::file, r: (size | io::error)) void = {
 		yield n;
 	};
 
-	log::println("client_write", n);
-
 	ev::read(client.sock, &client_read, client.input);
 };
 
