@@ -28,7 +28,7 @@ type server = struct {
 	sock: *ev::file,
 	clients: []*client,
 	db: *bitcask::db,
-	map: *game::map,
+	maps: [](str, *game::map),
 	exit: int,
 };
 
@@ -52,14 +52,14 @@ export fn main() void = {
 	const cmd = getopt::parse(os::args, "Ævintýri",
 		('a', "addr", "host IP address to bind to (default: 0.0.0.0)"),
 		('p', "port", "port to listen on (default: 7913)"),
-		('s', "script", "script file to load (default: ./scripts/zombie.script)"),
+		('s', "scripts", "script directory to load (default: ./scripts)"),
 		('d', "dir", "directory to store database files (default: $XDG_DATA_HOME/.local/share/aevintyri)"),
 	);
 	defer getopt::finish(&cmd);
 
 	let addr: ip::addr = ip::ANY_V4;
 	let port: u16 = 7913;
-	let script: str = "./scripts/zombie.script";
+	let scripts: str = "./scripts";
 	let dir: str = dirs::data("aevintyri");
 	for (let i = 0z; i < len(cmd.opts); i += 1) {
 		const opt = cmd.opts[i];
@@ -69,25 +69,18 @@ export fn main() void = {
 		case 'p' =>
 			port = strconv::stou16(opt.1)!;
 		case 's' =>
-			script = opt.1;
+			scripts = opt.1;
 		case 'd' =>
 			dir = strings::dup(opt.1);
 		case => abort();
 		};
 	};
 
-	let scriptfile = match (os::open(script)) {
-	case let err: fs::error =>
-		log::fatalf("error: {}", fs::strerror(err));
-	case let f: io::file =>
-		yield f;
-	};
-
-	let map = match (game::parse(scriptfile)) {
-	case let err: scfg::error =>
-		log::fatalf("error: {}", scfg::strerror(err));
-	case let m: *game::map =>
-		yield m;
+	let maps = match(game::mapsinit(scripts)) {
+	case let m: [](str, *game::map) => yield m;
+	case let err: fs::error => log::fatalf("error: {}", fs::strerror(err));
+	case let err: scfg::error => log::fatalf("error: {}", scfg::strerror(err));
+	case game::error => log::fatal("error");
 	};
 
 	let dbopts = bitcask::defaultopts;
@@ -115,7 +108,7 @@ export fn main() void = {
 		loop = &loop,
 		sock = sock,
 		db = db,
-		map = map,
+		maps = maps,
 		...
 	};
 	ev::setuser(sock, &state);
@@ -156,8 +149,8 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 		sock = sock,
 		addr = addr,
 		port = port,
+		map = game::map_dup(server.maps[0].1),
 		messages = game::newqueue(),
-		map = game::map_dup(server.map),
 		...
 	});
 	append(server.clients, client);
@@ -198,6 +191,22 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::ABOUT, game::PROMPT)));
 		case game::action::HELP =>
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::help(), game::PROMPT)));
+		case game::action::PLAY =>
+			if (cmd.1 == "") {
+				response = strings::concat(response, "What would you like to play? (ex. > play adventure.script)\n\n");
+				for (let i = 0z; i < len(client.server.maps); i += 1) {
+					response = strings::concat(response, client.server.maps[i].0, " - ", client.server.maps[i].1.welcome, "\n");
+				};
+			} else {
+				for (let i = 0z; i < len(client.server.maps); i += 1) {
+					if (client.server.maps[i].0 == cmd.1) {
+						client.map = game::map_dup(client.server.maps[i].1);
+					};
+				};
+
+				const map = client.map as *game::map;
+				response = map.currarea.dialog;
+			};
 		case game::action::LOAD =>
 			let response = match (client.player) {
 			case let p: *game::player =>
@@ -257,6 +266,7 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			};
 
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
+			return;
 		};
 
 		let queuesize = game::queuegetsize(client.messages);

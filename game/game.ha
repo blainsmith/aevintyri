@@ -30,6 +30,7 @@ export const PROMPT: str = "\n\n» ";
 
 export type map = struct {
 	id: str,
+	welcome: str,
 	allareas: []*area,
 	currarea: *area,
 	inventory: []str,
@@ -100,6 +101,7 @@ export fn parse(f: io::handle) (*map | scfg::error | error) = {
 	};
 
 	return alloc(map {
+		welcome = strings::dup(welcome),
 		allareas = areas,
 		currarea = areas[0],
 		...

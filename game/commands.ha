@@ -57,6 +57,7 @@ export type action = enum {
 	USE,
 	NICK,
 	LOAD,
+	PLAY,
 	QUIT,
 	HELP,
 	ABOUT,
@@ -71,6 +72,7 @@ export fn parseaction(s: str) (action | invalid) = {
 	case "use" => return action::USE;
 	case "nick" => return action::NICK;
 	case "load" => return action::LOAD;
+	case "play" => return action::PLAY;
 	case "quit", "exit" => return action::QUIT;
 	case "help" => return action::HELP;
 	case "about" => return action::ABOUT;
@@ -93,6 +95,7 @@ export fn actionstr(a: action) str = {
 	case action::USE => return "use";
 	case action::NICK => return "nick";
 	case action::LOAD => return "load";
+	case action::PLAY => return "play";
 	case action::QUIT => return "quit";
 	case action::HELP => return "help";
 	case action::ABOUT => return "about";
