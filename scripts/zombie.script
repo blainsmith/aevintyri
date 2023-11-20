@@ -18,5 +18,10 @@ area "Car Accident" {
 area "Shipping Container" {
 	dialog "You make you way along the street and stop next to a rusted out shipping container. The door is open."
 	subarea "container floor" "The floor is covered in blood and a human hand holding an old iron key."
-	item "old iron key" dialog "You pick up the bloody key and place it into your pocket."
+	item "old iron key" "You pick up the bloody key and place it into your pocket. You think it could be used at the Street Light" "Street Light" "connect:Locked Room,east" "false"
+}
+
+area "Locked Room" {
+	dialog "Locked Room east of Street Light. For testing."
+	xwest "Street Light"
 }

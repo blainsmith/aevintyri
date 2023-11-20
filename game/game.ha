@@ -27,7 +27,8 @@ export const PROMPT: str = "\n\n» ";
 export type map = struct {
 	welcome: str,
 	currarea: *area,
-	inventory: []str,
+	inventory: [](str, str, str, str, str),
+	allareas: []*area,
 };
 
 export type area = struct {
@@ -36,7 +37,8 @@ export type area = struct {
 
 	adjacent: [](direction, *area),
 	subarea: (str, str),
-	item: (str, str),
+	//(Item Name, Item Description, Where to use, What it does, Has it been used)
+	item: (str, str, str, str, str),
 };
 
 export fn parse(f: io::handle) (*map | scfg::error | error) = {
@@ -71,9 +73,9 @@ export fn parse(f: io::handle) (*map | scfg::error | error) = {
 		case "subarea" =>
 			areas[a].subarea = (strings::dup(directive.2[0]), strings::dup(directive.2[1]));
 		case "item" =>
-		//how does it split the item into its name and dialog? add a hidden param after some identifier symbol
-			areas[a].item = (strings::dup(directive.2[0]), strings::dup(directive.2[1]));
-		case "north", "south", "east", "west" =>
+		//probably want a helper here eventually, since I'd like to have some non string params like a used bool
+			areas[a].item = (strings::dup(directive.2[0]), strings::dup(directive.2[1]), strings::dup(directive.2[2]), strings::dup(directive.2[3]), strings::dup(directive.2[4]));
+		case "north", "south", "east", "west", "xnorth", "xsouth", "xeast", "xwest" =>
 			let dir = match (parsedirection(directive.1)) {
 			case let i: invalid =>
 				return i;
@@ -93,10 +95,11 @@ export fn parse(f: io::handle) (*map | scfg::error | error) = {
 
 		adjacent(a1, dirs[d].1, a2);
 	};
-
+	printslice(areas);
 	return alloc(map {
 		welcome = strings::dup(strings::concat(welcome, "\n\n")),
 		currarea = areas[0],
+		allareas = areas,
 		...
 	});
 };
@@ -109,6 +112,8 @@ fn getarea(areas: []*area, name: str) (*area | void) = {
 	};
 	return;
 };
+
+
 
 @test fn parse() void = {
 	let script = os::open("./scripts/zombie.script")!;
@@ -128,14 +133,17 @@ export fn map_dup(m: *map) *map = {
 	});
 };
 
-export fn move(m: *map, d: direction) void = {
+export fn move(m: *map, d: direction) bool = {
 	for (let i = 0z; i < len(m.currarea.adjacent); i += 1) {
 		if (m.currarea.adjacent[i].0 == d) {
 			m.currarea = m.currarea.adjacent[i].1;
+			//added for easier testing
+			printslice(m.allareas);
+			return true;
 		};
 	};
 
-	return;
+	return false;
 };
 
 export fn look(m: *map, a: str) (str | void) = {
@@ -147,10 +155,51 @@ export fn look(m: *map, a: str) (str | void) = {
 
 export fn pick(m: *map, i: str) (str | void) = {
 	if (m.currarea.item.0 == i) {
-		append(m.inventory, m.currarea.item.1);
+		append(m.inventory, m.currarea.item);
 		return m.currarea.item.1;
 	};
 	return;
+};
+
+export fn use_item(map: *map, args: str) str = {
+	//I think I want to add parameters which store info on how the item can be used, this method will check them and 
+	//return based on if the conditions are met, and then do something if they are, I can have a condition param, and an action
+	//param.
+	//case "item" =>
+	//		areas[a].item = (strings::dup(directive.2[0]), strings::dup(directive.2[1]));
+	for (let i = 0z; i < len(map.inventory); i += 1) {
+		if (map.inventory[i].0 == args) {//using an item we have, now check if in correct location
+			if (map.inventory[i].2 == map.currarea.name) { //in correct location, if unused do action
+				if (map.inventory[i].4 == "false") { //unused now do action
+					let (act, details) = strings::cut(map.inventory[i].3, ":");
+					switch (act) {
+					case "connect" => 
+						let (loc, direc) = strings::cut(details, ",");
+						let dir = trustedparsedirection(direc);
+						fmt::println(loc)!;
+						fmt::println("----------------")!;
+						printslice(map.allareas);
+						let a2 = match (getarea(map.allareas, loc)) {
+						case let i: void =>
+							return "Something is broken, area in script not in map";
+						case let a: *area =>
+							yield a;
+						};
+						adjacent(map.currarea, dir, a2);
+					case => return "other actions";
+					};
+
+					map.inventory[i].4 = "true";
+					return strings::concat("You used the ", args);
+				} else {
+					return "You have already used this item";
+				};
+			} else {
+				return "It seems like this needs to be used somewhere else";
+			};
+		};
+	};
+	return "You don't have an item like that";
 };
 
 export fn help() str = {
@@ -158,17 +207,32 @@ export fn help() str = {
 };
 
 export fn adjacent(a: *area, d: direction, b: *area) void = {
-	append(a.adjacent, (d, b));
+	if (!isexclusive(d)) {
+		append(a.adjacent, (d, b));
+	};
 	switch (d) {
 	case direction::NORTH => append(b.adjacent, (direction::SOUTH, a));
 	case direction::SOUTH => append(b.adjacent, (direction::NORTH, a));
 	case direction::EAST => append(b.adjacent, (direction::WEST, a));
 	case direction::WEST => append(b.adjacent, (direction::EAST, a));
+	//Exclusive directions should only add adjacency in one direction
+	case direction::XNORTH => append(a.adjacent, (direction::NORTH, b));
+	case direction::XSOUTH => append(a.adjacent, (direction::SOUTH, b));
+	case direction::XEAST => append(a.adjacent, (direction::EAST, b));
+	case direction::XWEST => append(a.adjacent, (direction::WEST, b));
 	};
 };
 
 export fn areaequals(map1: *map, map2: *map) bool = {
 	return (map1.currarea.name == map2.currarea.name);
+};
+
+export fn printslice(areas: []*area) void = {
+	fmt::println("--start--")!;
+	for (let a = 0z; a < len(areas); a += 1) {
+		fmt::println(areas[a].name)!;
+	};
+	fmt::println("--end--")!;
 };
 
 @test fn move() void = {
@@ -183,3 +247,4 @@ export fn areaequals(map1: *map, map2: *map) bool = {
 	move(&m, direction::EAST);
 	assert(m.currarea.name == "Street Light");
 };
+
