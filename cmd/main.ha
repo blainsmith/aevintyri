@@ -94,7 +94,7 @@ export fn main() void = {
 	const loop = ev::newloop()!;
 	defer ev::finish(&loop);
 
-	const sock = match (ev::listen_tcp(&loop, addr, port)) {
+	const sock = match (ev::listen_tcp(&loop, addr, port, tcp::reuseaddr)) {
 	case let err: net::error =>
 		log::fatalf("error", net::strerror(err));
 	case let err: errors::error =>
@@ -102,7 +102,7 @@ export fn main() void = {
 	case let sock: *ev::file =>
 		yield sock;
 	};
-	defer ev::close(sock);
+	// defer ev::close(sock);
 
 	let state = server {
 		loop = &loop,
@@ -120,13 +120,19 @@ export fn main() void = {
 
 	log::println("addr", ip::string(addr), "port", port);
 	for (ev::dispatch(&loop, -1)!) void;
+	log::println("exit_code", state.exit);
 	os::exit(state.exit);
 };
 
 fn signal(file: *ev::file, sig: signal::sig) void = {
-	log::println("signal", signal::signame(sig));
 	const server = ev::getuser(file): *server;
+	for (let i = 0z; i < len(server.clients); i += 1) {
+		client_close(server.clients[i]);
+	};
+	free(server.maps);
 	ev::stop(server.loop);
+	ev::close(server.sock);
+	log::println("signal", signal::signame(sig));
 };
 
 fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
@@ -306,16 +312,6 @@ fn client_write(sock: *ev::file, r: (size | io::error)) void = {
 };
 
 fn client_close(client: *client) void = {
-	const server = client.server;
-	for (let i = 0z; i < len(server.clients); i += 1) {
-		if (server.clients[i] == client) {
-			delete(server.clients[i]);
-			break;
-		};
-	};
-	log::println("scope", "client_close",
-		"client_addr", ip::string(client.addr),
-		"client_port", client.port);
 	ev::close(client.sock);
 
 	match (client.map) {
@@ -326,6 +322,19 @@ fn client_close(client: *client) void = {
 		yield;
 	};
 	free(client.player);
+
+	const server = client.server;
+	for (let i = 0z; i < len(server.clients); i += 1) {
+		if (server.clients[i] == client) {
+			delete(server.clients[i]);
+			break;
+		};
+	};
+
+	log::println("scope", "client_close",
+		"client_addr", ip::string(client.addr),
+		"client_port", client.port);
+
 	free(client);
 };
 
