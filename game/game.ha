@@ -46,7 +46,7 @@ export fn parse(f: io::handle) (*map | scfg::error | error) = {
 	defer scfg::finish(&scn);
 
 	let a = -1;
-	let areas: []*area = [];
+	let areas: []*area = alloc([], 0);
 	let dirs: [](str, direction, str) = [];
 	let welcome = "";
 
