@@ -2,13 +2,13 @@ welcome "Zombie Survival 3013"
 
 area "Wooded Forest" {
 	dialog "You find yourself alone in a wooded forest. To the east you see a dim light."
-	east "Street Light"
+	east "bi" "Street Light"
 }
 
 area "Street Light" {
 	dialog "You come to a clearing and happen upon a street light at the end of it. There is a road that run north to south."
-	north "Shipping Container"
-	south "Car Accident"
+	north "bi" "Shipping Container"
+	south "bi" "Car Accident"
 }
 
 area "Car Accident" {
@@ -23,5 +23,5 @@ area "Shipping Container" {
 
 area "Locked Room" {
 	dialog "Locked Room east of Street Light. For testing."
-	xwest "Street Light"
+	west "uni" "Street Light"
 }

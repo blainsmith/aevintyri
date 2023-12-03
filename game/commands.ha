@@ -14,10 +14,11 @@ export type direction = enum {
 	SOUTH,
 	EAST,
 	WEST,
-	XNORTH,
-	XSOUTH,
-	XEAST,
-	XWEST,
+};
+
+export type dirtype = enum {
+	UNIDIRECTIONAL,
+	BIDIRECTIONAL,
 };
 
 export fn directioninv(d: direction) direction = {
@@ -26,10 +27,6 @@ export fn directioninv(d: direction) direction = {
 	case direction::SOUTH => return direction::NORTH;
 	case direction::EAST => return direction::WEST;
 	case direction::WEST => return direction::EAST;
-	case direction::XNORTH => return direction::XSOUTH;
-	case direction::XSOUTH => return direction::XNORTH;
-	case direction::XEAST => return direction::XWEST;
-	case direction::XWEST => return direction::XEAST;
 	};
 };
 
@@ -39,10 +36,6 @@ export fn directionstr(d: direction) str = {
 	case direction::SOUTH => return "south";
 	case direction::EAST => return "east";
 	case direction::WEST => return "west";
-	case direction::XNORTH => return "xnorth";
-	case direction::XSOUTH => return "xsouth";
-	case direction::XEAST => return "xeast";
-	case direction::XWEST => return "xwest";
 	};
 };
 
@@ -52,10 +45,14 @@ export fn parsedirection(s: str) (direction | invalid) = {
 	case "south", "s" => return direction::SOUTH;
 	case "east", "e" => return direction::EAST;
 	case "west", "w" => return direction::WEST;
-	case "xnorth" => return direction::XNORTH;
-	case "xsouth", => return direction::XSOUTH;
-	case "xeast", => return direction::XEAST;
-	case "xwest", => return direction::XWEST;
+	case => return invalid;
+	};
+};
+
+export fn parsedirtype(s: str) (dirtype | invalid) = {
+	switch (ascii::strlower(s)) {
+	case "uni", "unidirectional" => return dirtype::UNIDIRECTIONAL;
+	case "bi", "bidirectional" => return dirtype::BIDIRECTIONAL;
 	case => return invalid;
 	};
 };
@@ -67,22 +64,8 @@ export fn trustedparsedirection(s: str) direction = {
 	case "south", "s" => return direction::SOUTH;
 	case "east", "e" => return direction::EAST;
 	case "west", "w" => return direction::WEST;
-	case "xnorth" => return direction::XNORTH;
-	case "xsouth", => return direction::XSOUTH;
-	case "xeast", => return direction::XEAST;
-	case "xwest", => return direction::XWEST;
 	//Shouldn't ever hit
 	case => return direction::NORTH;
-	};
-};
-
-export fn isexclusive(d: direction) bool = {
-	switch (d) {
-	case direction::XNORTH => return true;
-	case direction::XSOUTH => return true;
-	case direction::XEAST => return true;
-	case direction::XWEST => return true;
-	case => return false;
 	};
 };
 
@@ -163,10 +146,7 @@ export fn exec_command(map: *map, cmd: command) str = {
 		const d = match (parsedirection(cmd.1)) {
 		case let d: direction =>
 			let y: str = "";
-			if (isexclusive(d)) {
-				//Xdirections are for behind the scenes use only
-				y = "Not a direction";
-			} else if (move(map, d)) {
+			if (move(map, d)) {
 				y = map.currarea.dialog;
 			} else {
 				//uesd a valid direction but nothing is in that direction, or one way path
