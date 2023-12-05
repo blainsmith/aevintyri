@@ -7,7 +7,9 @@ use strings;
 
 use vendor::format::scfg;
 
-const ABOUT: str = `Ævintýri
+export const WELCOME: str = "+----------------------+\n| Welcome to Ævintýri! |\n+----------------------+";
+
+export const ABOUT: str = `Ævintýri
 
 Developed by:
   Blain
@@ -19,12 +21,15 @@ Built with:
 
 Open source libraries:
   https://git.sr.ht/~sircmpwn/hare-ev
+  https://git.sr.ht/~sircmpwn/hare-json
   https://git.sr.ht/~chrisppy/hare-scfg
+  https://git.sr.ht/~blainsmith/hare-bitcask
   https://git.sr.ht/~blainsmith/hare-logfmt`;
 
 export const PROMPT: str = "\n\n» ";
 
 export type map = struct {
+	id: str,
 	welcome: str,
 	currarea: *area,
 	inventory: [](str, str, str, str, str),
@@ -32,6 +37,7 @@ export type map = struct {
 };
 
 export type area = struct {
+	id: str,
 	name: str,
 	dialog: str,
 
@@ -107,7 +113,7 @@ export fn parse(f: io::handle) (*map | scfg::error | error) = {
 		
 	};
 	return alloc(map {
-		welcome = strings::dup(strings::concat(welcome, "\n\n")),
+		welcome = strings::dup(welcome),
 		currarea = areas[0],
 		allareas = areas,
 		...
@@ -128,7 +134,6 @@ fn getarea(areas: []*area, name: str) (*area | void) = {
 @test fn parse() void = {
 	let script = os::open("./scripts/zombie.script")!;
 	let map = parse(script)!;
-	assert(map.welcome == "TBD");
 	assert(map.currarea.name == "Wooded Forest");
 	assert(map.currarea.adjacent[0].1.name == "Street Light");
 	assert(map.currarea.adjacent[0].1.adjacent[1].1.name == "Shipping Container");
@@ -137,11 +142,20 @@ fn getarea(areas: []*area, name: str) (*area | void) = {
 
 export fn map_dup(m: *map) *map = {
 	return alloc(map {
-		welcome = strings::dup(m.welcome),
 		currarea = alloc(*m.currarea),
 		allareas = m.allareas,
 		...
 	});
+};
+
+export fn map_loadarea(m: *map, aid: str) void = {
+	for (let i = 0z; i < len(m.allareas); i += 1) {
+		if (m.allareas[i].id == aid) {
+			m.currarea = m.allareas[i];
+		};
+	};
+
+	return;
 };
 
 export fn move(m: *map, d: direction) bool = {
@@ -207,7 +221,15 @@ export fn use_item(map: *map, args: str) str = {
 };
 
 export fn help() str = {
-	return "move <direction>\nlook <direction>\npick <item-name>\nuse <item-name>\nsay <what-to-say> (talk to others in same area)\nquit\nhelp\nabout";
+	return `nick <name> - identify yourself as <name>
+load - loads your previously saved area
+move <direction> - move in the given direction
+look <object> - look at specific object to inspect it
+pick <item> - pick up an item
+use <item> - use an item
+quit - quit the game and disconnect
+help - prints this help text
+about - show information about the game`;
 };
 
 export fn bidirectional(a: *area, d: direction, b: *area) void = {

@@ -28,7 +28,7 @@ type server = struct {
 	sock: *ev::file,
 	clients: []*client,
 	db: *bitcask::db,
-	map: *game::map,
+	maps: [](str, *game::map),
 	exit: int,
 };
 
@@ -41,7 +41,7 @@ type client = struct {
 
 	messages: *game::messageQueue,
 
-	map: *game::map,
+	map: nullable *game::map,
 	player: nullable *game::player,
 };
 
@@ -52,14 +52,14 @@ export fn main() void = {
 	const cmd = getopt::parse(os::args, "Ævintýri",
 		('a', "addr", "host IP address to bind to (default: 0.0.0.0)"),
 		('p', "port", "port to listen on (default: 7913)"),
-		('s', "script", "script file to load (default: ./scripts/zombie.script)"),
+		('s', "scripts", "script directory to load (default: ./scripts)"),
 		('d', "dir", "directory to store database files (default: $XDG_DATA_HOME/.local/share/aevintyri)"),
 	);
 	defer getopt::finish(&cmd);
 
 	let addr: ip::addr = ip::ANY_V4;
 	let port: u16 = 7913;
-	let script: str = "./scripts/zombie.script";
+	let scripts: str = "./scripts";
 	let dir: str = dirs::data("aevintyri");
 	for (let i = 0z; i < len(cmd.opts); i += 1) {
 		const opt = cmd.opts[i];
@@ -69,25 +69,18 @@ export fn main() void = {
 		case 'p' =>
 			port = strconv::stou16(opt.1)!;
 		case 's' =>
-			script = opt.1;
+			scripts = opt.1;
 		case 'd' =>
 			dir = strings::dup(opt.1);
 		case => abort();
 		};
 	};
 
-	let scriptfile = match (os::open(script)) {
-	case let err: fs::error =>
-		log::fatalf("error: {}", fs::strerror(err));
-	case let f: io::file =>
-		yield f;
-	};
-
-	let map = match (game::parse(scriptfile)) {
-	case let err: scfg::error =>
-		log::fatalf("error: {}", scfg::strerror(err));
-	case let m: *game::map =>
-		yield m;
+	let maps = match(game::mapsinit(scripts)) {
+	case let m: [](str, *game::map) => yield m;
+	case let err: fs::error => log::fatalf("error: {}", fs::strerror(err));
+	case let err: scfg::error => log::fatalf("error: {}", scfg::strerror(err));
+	case game::error => log::fatal("error");
 	};
 
 	let dbopts = bitcask::defaultopts;
@@ -101,7 +94,7 @@ export fn main() void = {
 	const loop = ev::newloop()!;
 	defer ev::finish(&loop);
 
-	const sock = match (ev::listen_tcp(&loop, addr, port)) {
+	const sock = match (ev::listen_tcp(&loop, addr, port, tcp::reuseaddr)) {
 	case let err: net::error =>
 		log::fatalf("error", net::strerror(err));
 	case let err: errors::error =>
@@ -109,13 +102,13 @@ export fn main() void = {
 	case let sock: *ev::file =>
 		yield sock;
 	};
-	defer ev::close(sock);
+	// defer ev::close(sock);
 
 	let state = server {
 		loop = &loop,
 		sock = sock,
 		db = db,
-		map = map,
+		maps = maps,
 		...
 	};
 	ev::setuser(sock, &state);
@@ -127,13 +120,19 @@ export fn main() void = {
 
 	log::println("addr", ip::string(addr), "port", port);
 	for (ev::dispatch(&loop, -1)!) void;
+	log::println("exit_code", state.exit);
 	os::exit(state.exit);
 };
 
 fn signal(file: *ev::file, sig: signal::sig) void = {
-	log::println("signal", signal::signame(sig));
 	const server = ev::getuser(file): *server;
+	for (let i = 0z; i < len(server.clients); i += 1) {
+		client_close(server.clients[i]);
+	};
+	free(server.maps);
 	ev::stop(server.loop);
+	ev::close(server.sock);
+	log::println("signal", signal::signame(sig));
 };
 
 fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
@@ -156,13 +155,13 @@ fn server_accept(sock: *ev::file, r: (*ev::file | net::error)) void = {
 		sock = sock,
 		addr = addr,
 		port = port,
+		map = game::map_dup(server.maps[0].1),
 		messages = game::newqueue(),
-		map = game::map_dup(server.map),
 		...
 	});
 	append(server.clients, client);
 	ev::setuser(client.sock, client);
-	ev::write(client.sock, &client_noop, strings::toutf8(strings::concat(client.map.welcome, client.map.currarea.dialog, game::PROMPT)));
+	ev::write(client.sock, &client_noop, strings::toutf8(strings::concat(game::WELCOME, game::PROMPT)));
 	ev::read(client.sock, &client_read, client.input);
 	ev::accept(server.sock, &server_accept);
 };
@@ -194,6 +193,46 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 		case game::action::QUIT =>
 			client_close(client);
 			return;
+		case game::action::ABOUT =>
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::ABOUT, game::PROMPT)));
+		case game::action::HELP =>
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::help(), game::PROMPT)));
+		case game::action::PLAY =>
+			if (cmd.1 == "") {
+				response = strings::concat(response, "What would you like to play? (ex. > play adventure.script)\n\n");
+				for (let i = 0z; i < len(client.server.maps); i += 1) {
+					response = strings::concat(response, client.server.maps[i].0, " - ", client.server.maps[i].1.welcome, "\n");
+				};
+			} else {
+				for (let i = 0z; i < len(client.server.maps); i += 1) {
+					if (client.server.maps[i].0 == cmd.1) {
+						client.map = game::map_dup(client.server.maps[i].1);
+					};
+				};
+
+				const map = client.map as *game::map;
+				response = map.currarea.dialog;
+			};
+		case game::action::LOAD =>
+			let response = match (client.player) {
+			case let p: *game::player =>
+				let key = fmt::asprintf("{}:game", p.nick);
+				let map = client.map as *game::map;
+
+				match(bitcask::get(client.server.db, key)) {
+				case void =>
+					yield;
+				case let val: []u8 =>
+					let (mid, aid) = strings::cut(strings::fromutf8_unsafe(val), ":");
+					game::map_loadarea(map, aid);
+				};
+
+				yield map.currarea.dialog;
+			case null =>
+				yield "Use NICK <name> to identify yourself before attempting to load a game.";
+			};
+
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
 		case game::action::NICK =>
 			response = match(nick(client, cmd.1)) {
 			case let p: *game::player =>
@@ -208,7 +247,32 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			broadcast_message(client, cmd.1);
 			response = strings::concat("You say: ", cmd.1);
 		case =>
-			response = game::exec_command(client.map, cmd);
+			let response = match(client.map) {
+			case let map: *game::map =>
+				let response = game::exec_command(map, cmd);
+
+				match (client.player) {
+				case let p: *game::player =>
+					let key = fmt::asprintf("{}:game", p.nick);
+					let val = strings::toutf8(strings::join(":", map.id, map.currarea.id));
+
+					match (bitcask::put(client.server.db, key, val)) {
+					case let err: bitcask::error =>
+						log::println("error saving currmap to db: ", bitcask::strerror(err));
+					case =>
+						yield;
+					};
+				case =>
+					yield;
+				};
+
+				yield response;
+			case null =>
+				yield "No game loaded";
+			};
+
+			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
+			return;
 		};
 
 		let queuesize = game::queuegetsize(client.messages);
@@ -248,6 +312,17 @@ fn client_write(sock: *ev::file, r: (size | io::error)) void = {
 };
 
 fn client_close(client: *client) void = {
+	ev::close(client.sock);
+
+	match (client.map) {
+	case let m: *game::map =>
+		free(m.currarea.adjacent);
+		free(m.currarea);
+	case null =>
+		yield;
+	};
+	free(client.player);
+
 	const server = client.server;
 	for (let i = 0z; i < len(server.clients); i += 1) {
 		if (server.clients[i] == client) {
@@ -255,13 +330,11 @@ fn client_close(client: *client) void = {
 			break;
 		};
 	};
+
 	log::println("scope", "client_close",
 		"client_addr", ip::string(client.addr),
 		"client_port", client.port);
-	ev::close(client.sock);
-	free(client.map.currarea.adjacent);
-	free(client.map.currarea);
-	free(client.player);
+
 	free(client);
 };
 
@@ -274,11 +347,12 @@ fn client_close(client: *client) void = {
 // * `message` - The message being broadcasted
 fn broadcast_message(client: *client, message: str) void = {
 	const server = client.server;
+	const map = client.map as *game::map;
+
 	for (let i = 0z; i < len(server.clients); i += 1) {
 		if (server.clients[i] != client) {
-			if (game::areaequals(server.clients[i].map, client.map)) {
-			//fmt::println(message)!;
-			game::queueadd(server.clients[i].messages, strings::concat("(", client.map.currarea.name, ") Someone said: ", message));
+			if (game::areaequals(server.clients[i].map as *game::map, map)) {
+				game::queueadd(server.clients[i].messages, strings::concat("(", map.currarea.name, ") Someone said: ", message));
 			};
 		};
 	};
