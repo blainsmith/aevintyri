@@ -195,8 +195,10 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			return;
 		case game::action::ABOUT =>
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::ABOUT, game::PROMPT)));
+			return;
 		case game::action::HELP =>
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(game::help(), game::PROMPT)));
+			return;
 		case game::action::PLAY =>
 			if (cmd.1 == "") {
 				response = strings::concat(response, "What would you like to play? (ex. > play adventure.script)\n\n");
@@ -233,6 +235,7 @@ fn client_read(sock: *ev::file, r: (size | io::EOF | io::error)) void = {
 			};
 
 			ev::write(client.sock, &client_write, strings::toutf8(strings::concat(response, game::PROMPT)));
+			return;
 		case game::action::NICK =>
 			response = match(nick(client, cmd.1)) {
 			case let p: *game::player =>

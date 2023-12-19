@@ -174,6 +174,9 @@ load - loads your previously saved area
 move <direction> - move in the given direction
 look <object> - look at specific object to inspect it
 pick <item> - pick up an item
+play - list available game scripts to play
+play <script> - play the specified game script
+say <message> - say a message to all connected players
 use <item> - use an item
 quit - quit the game and disconnect
 help - prints this help text

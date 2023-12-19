@@ -95,7 +95,6 @@ export fn next(s: *scanner) (directive | io::EOF | error) = {
 			);
 		};
 	};
-	abort(); //Unreachable
 };
 
 // Frees the resources associated with a [[scanner]].
