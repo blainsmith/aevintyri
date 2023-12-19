@@ -2,7 +2,7 @@ welcome "Waking World"
 
 area "Jail Cell" {
     dialog "You find yourself in a prison cell of some sort. Its quiet eerily quiet, not the faintest sign of life."
-    item "warped hooked shaped board" "You pick up the strange looking board. It almost looks as if it could pick something up."
+    item "warped hooked shaped board" "You pick up the strange looking board. It almost looks as if it could pick something up." "" "" ""
     subarea "between the prison bars" "Between the old rusted bars you spot a corpse of what looks to be a guard. On his side you spot a key ring."
     south "Northern Prison Wing"
 }

@@ -16,12 +16,17 @@ export type direction = enum {
 	WEST,
 };
 
+export type dirtype = enum {
+	UNIDIRECTIONAL,
+	BIDIRECTIONAL,
+};
+
 export fn directioninv(d: direction) direction = {
 	switch (d) {
 	case direction::NORTH => return direction::SOUTH;
 	case direction::SOUTH => return direction::NORTH;
-	case direction::EAST => return direction::EAST;
-	case direction::WEST => return direction::WEST;
+	case direction::EAST => return direction::WEST;
+	case direction::WEST => return direction::EAST;
 	};
 };
 
@@ -41,6 +46,26 @@ export fn parsedirection(s: str) (direction | invalid) = {
 	case "east", "e" => return direction::EAST;
 	case "west", "w" => return direction::WEST;
 	case => return invalid;
+	};
+};
+
+export fn parsedirtype(s: str) (dirtype | invalid) = {
+	switch (ascii::strlower(s)) {
+	case "uni", "unidirectional" => return dirtype::UNIDIRECTIONAL;
+	case "bi", "bidirectional" => return dirtype::BIDIRECTIONAL;
+	case => return invalid;
+	};
+};
+
+//probably should remove eventually, made for use item since I didn't want to mess with error throwing
+export fn trustedparsedirection(s: str) direction = {
+	switch (ascii::strlower(s)) {
+	case "north", "n" => return direction::NORTH;
+	case "south", "s" => return direction::SOUTH;
+	case "east", "e" => return direction::EAST;
+	case "west", "w" => return direction::WEST;
+	//Shouldn't ever hit
+	case => return direction::NORTH;
 	};
 };
 
@@ -126,8 +151,14 @@ export fn exec_command(map: *map, cmd: command) str = {
 	case action::MOVE =>
 		const d = match (parsedirection(cmd.1)) {
 		case let d: direction =>
-			move(map, d);
-			yield map.currarea.dialog;
+			let y: str = "";
+			if (move(map, d)) {
+				y = map.currarea.dialog;
+			} else {
+				//uesd a valid direction but nothing is in that direction, or one way path
+				y = "There is something blocking your path";
+			};
+			yield y;
 		case invalid =>
 			yield "Not a direction";
 		};
@@ -148,7 +179,7 @@ export fn exec_command(map: *map, cmd: command) str = {
 			yield "No item around";
 		};
 		return i;
-	case action::USE => return "Not implemented";
+	case action::USE => return use_item(map, cmd.1);
 	case action::NICK => return "Wrong context";
 	case action::HELP => return help();
 	case action::QUIT => return "Not implemented";

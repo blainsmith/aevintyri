@@ -31,9 +31,9 @@ export const PROMPT: str = "\n\n» ";
 export type map = struct {
 	id: str,
 	welcome: str,
-	allareas: []*area,
 	currarea: *area,
-	inventory: []str,
+	inventory: [](str, str, str, str, str),
+	allareas: []*area,
 };
 
 export type area = struct {
@@ -43,7 +43,8 @@ export type area = struct {
 
 	adjacent: [](direction, *area),
 	subarea: (str, str),
-	item: (str, str),
+	//(Item Name, Item Description, Where to use, What it does, Has it been used)
+	item: (str, str, str, str, str),
 };
 
 export fn parse(f: io::handle) (*map | scfg::error | error) = {
@@ -52,7 +53,7 @@ export fn parse(f: io::handle) (*map | scfg::error | error) = {
 
 	let a = -1;
 	let areas: []*area = alloc([], 0);
-	let dirs: [](str, direction, str) = [];
+	let dirs: [](str, direction, dirtype, str) = [];
 	let welcome = "";
 
 	for (true) {
@@ -78,7 +79,8 @@ export fn parse(f: io::handle) (*map | scfg::error | error) = {
 		case "subarea" =>
 			areas[a].subarea = (strings::dup(directive.2[0]), strings::dup(directive.2[1]));
 		case "item" =>
-			areas[a].item = (strings::dup(directive.2[0]), strings::dup(directive.2[1]));
+		//probably want a helper here eventually, since I'd like to have some non string params like a used bool
+			areas[a].item = (strings::dup(directive.2[0]), strings::dup(directive.2[1]), strings::dup(directive.2[2]), strings::dup(directive.2[3]), strings::dup(directive.2[4]));
 		case "north", "south", "east", "west" =>
 			let dir = match (parsedirection(directive.1)) {
 			case let i: invalid =>
@@ -87,7 +89,14 @@ export fn parse(f: io::handle) (*map | scfg::error | error) = {
 				yield d;
 			};
 
-			append(dirs, (areas[a].name, dir, directive.2[0]));
+			let dirtype = match (parsedirtype(directive.2[0])) {
+			case let i: invalid =>
+				return i;
+			case let d: dirtype =>
+				yield d;
+			};
+
+			append(dirs, (areas[a].name, dir, dirtype, directive.2[1]));
 		case =>
 			yield;
 		};
@@ -95,15 +104,18 @@ export fn parse(f: io::handle) (*map | scfg::error | error) = {
 
 	for (let d = 0z; d < len(dirs); d += 1) {
 		let a1 = getarea(areas, dirs[d].0) as *area;
-		let a2 = getarea(areas, dirs[d].2) as *area;
-
-		adjacent(a1, dirs[d].1, a2);
+		let a2 = getarea(areas, dirs[d].3) as *area;
+		if (dirs[d].2 == dirtype::BIDIRECTIONAL) {
+			bidirectional(a1, dirs[d].1, a2);
+		} else {
+			unidirectional(a1, dirs[d].1, a2);
+		};
+		
 	};
-
 	return alloc(map {
 		welcome = strings::dup(welcome),
-		allareas = areas,
 		currarea = areas[0],
+		allareas = areas,
 		...
 	});
 };
@@ -117,6 +129,8 @@ fn getarea(areas: []*area, name: str) (*area | void) = {
 	return;
 };
 
+
+
 @test fn parse() void = {
 	let script = os::open("./scripts/zombie.script")!;
 	let map = parse(script)!;
@@ -129,6 +143,7 @@ fn getarea(areas: []*area, name: str) (*area | void) = {
 export fn map_dup(m: *map) *map = {
 	return alloc(map {
 		currarea = alloc(*m.currarea),
+		allareas = m.allareas,
 		...
 	});
 };
@@ -143,14 +158,15 @@ export fn map_loadarea(m: *map, aid: str) void = {
 	return;
 };
 
-export fn move(m: *map, d: direction) void = {
+export fn move(m: *map, d: direction) bool = {
 	for (let i = 0z; i < len(m.currarea.adjacent); i += 1) {
 		if (m.currarea.adjacent[i].0 == d) {
 			m.currarea = m.currarea.adjacent[i].1;
+			return true;
 		};
 	};
 
-	return;
+	return false;
 };
 
 export fn look(m: *map, a: str) (str | void) = {
@@ -162,10 +178,46 @@ export fn look(m: *map, a: str) (str | void) = {
 
 export fn pick(m: *map, i: str) (str | void) = {
 	if (m.currarea.item.0 == i) {
-		append(m.inventory, m.currarea.item.1);
+		append(m.inventory, m.currarea.item);
 		return m.currarea.item.1;
 	};
 	return;
+};
+
+export fn use_item(map: *map, args: str) str = {
+	//loop over all items in inventory
+	for (let i = 0z; i < len(map.inventory); i += 1) {
+		if (map.inventory[i].0 == args) {//using an item we have, now check if in correct location
+			if (map.inventory[i].2 == map.currarea.name) { //in correct location, if unused do action
+				if (map.inventory[i].4 == "false") { //unused now do action
+					//item layout for reference[name, description, location of use, action:details, used boolean]
+					let (act, details) = strings::cut(map.inventory[i].3, ":");
+					switch (act) {
+					case "connect" => 
+					//if action is connect then details should be the location being connected. currently always connects current location to what is in details
+						let (loc, direc) = strings::cut(details, ",");
+						let dir = trustedparsedirection(direc);
+						let a2 = match (getarea(map.allareas, loc)) {
+						case let i: void =>
+							return "Something is broken, area in script not in map";
+						case let a: *area =>
+							yield a;
+						};
+						unidirectional(map.currarea, dir, a2);
+					case => return "other actions";
+					};
+
+					map.inventory[i].4 = "true";
+					return strings::concat("You used the ", args);
+				} else {
+					return "You have already used this item";
+				};
+			} else {
+				return "It seems like this needs to be used somewhere else";
+			};
+		};
+	};
+	return "You don't have an item like that";
 };
 
 export fn help() str = {
@@ -183,7 +235,7 @@ help - prints this help text
 about - show information about the game`;
 };
 
-export fn adjacent(a: *area, d: direction, b: *area) void = {
+export fn bidirectional(a: *area, d: direction, b: *area) void = {
 	append(a.adjacent, (d, b));
 	switch (d) {
 	case direction::NORTH => append(b.adjacent, (direction::SOUTH, a));
@@ -193,15 +245,27 @@ export fn adjacent(a: *area, d: direction, b: *area) void = {
 	};
 };
 
+export fn unidirectional(a: *area, d: direction, b: *area) void = {
+	append(a.adjacent, (d, b));
+};
+
 export fn areaequals(map1: *map, map2: *map) bool = {
 	return (map1.currarea.name == map2.currarea.name);
+};
+
+export fn printslice(areas: []*area) void = {
+	fmt::println("--start--")!;
+	for (let a = 0z; a < len(areas); a += 1) {
+		fmt::println(areas[a].name)!;
+	};
+	fmt::println("--end--")!;
 };
 
 @test fn move() void = {
 	let forest = area { name = "Wooded Forest", dialog = "You find yourself alone in a wooded forest. To the EAST you see a dim light.", ... };
 	let streetlight = area { name = "Street Light", dialog = "After walking through the forest you come to a clearing and come upon a street light at the end of the clearing. The road runs EAST to WEST and has no cars in sight.", ... };
 
-	adjacent(&forest, direction::EAST, &streetlight);
+	bidirectional(&forest, direction::EAST, &streetlight);
 
 	let m = map { currarea = &forest, ... };
 	assert(m.currarea.name == "Wooded Forest");
@@ -209,3 +273,4 @@ export fn areaequals(map1: *map, map2: *map) bool = {
 	move(&m, direction::EAST);
 	assert(m.currarea.name == "Street Light");
 };
+
